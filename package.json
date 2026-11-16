@@ -1,0 +1,12 @@
+{
+    "name": "com.holadivinus.seamlesscatalogs",
+    "version": "0.1.0",
+    "displayName": "Seamless Catalogs",
+    "description": "Tool to allow developers to easily use Resources from external Addressable catalogs.",
+    "unity": "2021.3",
+  "author": {
+    "name": "holadivinus",
+    "email": "holadivinus@gmail.com",
+    "url": "https://github.com/holadivinus/SeamlessCatalogs"
+  }
+}
