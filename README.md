@@ -7,3 +7,5 @@ And use them in Scenes & Prefabs.
  \- Goto Unity -> Window -> Package Manager   \
  \- Click the Top-Left + -> Add Package from git URL...  \
  \- Paste https://github.com/holadivinus/SeamlessCatalogs.git and press "Add".  
+
+When a catalog is loaded in-editor, It will automatically be available in the bottom left of the Project Browser, Under "Seamless Catalogs".
