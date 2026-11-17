@@ -79,14 +79,14 @@ namespace SeamlessCatalogs
             };
 
 
-            
+
         }
 
-        
+
 
         private static void StartRemotePrefabDrag(GameObject g, CatalogEntry e)
         {
-            handlingDrag = true; 
+            handlingDrag = true;
             remoteDragPrefab = g;
             remoteDragEntry = e;
             DragAndDrop.AddDropHandler(dropy);
@@ -108,7 +108,8 @@ namespace SeamlessCatalogs
         private static DragAndDropVisualMode dropy(UnityEngine.Object dropUpon, Vector3 worldPosition, Vector2 viewportPosition, Transform parentForDraggedObjects, bool perform)
         {
             // see if we have a local gunkfab
-            string gunkfabPath = $"Packages/com.holadivinus.seamlesscatalogs/RemotePrefabs/{remoteDragEntry.Location.PrimaryKey}.prefab";
+            string gunkfabPath = $"Assets/RemotePrefabs/{remoteDragEntry.Location.PrimaryKey}.prefab";
+            if (!Directory.Exists("Assets/RemotePrefabs/")) Directory.CreateDirectory("Assets/RemotePrefabs/");
             string o = "";
             if (!File.Exists(gunkfabPath))
             {
@@ -141,8 +142,9 @@ namespace SeamlessCatalogs
                     var prop = so.GetIterator();
                     while (prop.NextVisible(true))
                     {
+                        if (c == null) break;
                         if (prop.propertyType != SerializedPropertyType.ObjectReference) continue;
-                        if (prop.propertyPath == "m_Script") 
+                        if (prop.propertyPath == "m_Script")
                         {
                             if (!string.IsNullOrEmpty(AssetDatabase.GetAssetPath(prop.objectReferenceValue))) continue;
                             // gotta swap this to a real script
@@ -153,18 +155,20 @@ namespace SeamlessCatalogs
                             {
                                 prop.objectReferenceValue = realVersion;
                                 so.ApplyModifiedPropertiesWithoutUndo();
-                            } else
+                            }
+                            else
                             {
                                 prop.objectReferenceValue = null;
                                 so.ApplyModifiedPropertiesWithoutUndo();
                                 break;
                             }
-                            continue; 
+                            continue;
                         }
                         if (prop.objectReferenceValue == null) continue;
                         if (prop.objectReferenceValue is Component comp && comp.gameObject.scene.IsValid()) continue;
                         if (prop.objectReferenceValue is GameObject g && g.scene.IsValid()) continue;
 
+                        if (c == null) break;
                         // get path to gobj
                         List<int> gPath = new();
                         Transform gP = c.transform;
@@ -265,7 +269,7 @@ namespace SeamlessCatalogs
 
             if (handlingDrag && DragAndDrop.objectReferences.Length == 0)
                 EndRemotePrefabDrag();
-            
+
         }
 
         private static void RemoveMissingScripts(GameObject g)
@@ -298,7 +302,7 @@ namespace SeamlessCatalogs
     }
 }
 
-internal static class CatalogExtensions 
+internal static class CatalogExtensions
 {
     private static Type[] _ta = new Type[3];
     public static Type typeof_ProjectBrowser => _ta[0] ??= Type.GetType("UnityEditor.ProjectBrowser, UnityEditor");

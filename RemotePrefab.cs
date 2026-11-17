@@ -88,6 +88,8 @@ namespace SeamlessCatalogs
                 Component c = GetTargComp(gameObject, br);
                 using var so = new SerializedObject(c);
                 var prop = so.FindProperty(br.propPath);
+                if (prop.objectReferenceValue != null && !string.IsNullOrWhiteSpace(AssetDatabase.GetAssetPath(prop.objectReferenceValue)))
+                    continue;
                 prop.objectReferenceValue = null;
                 so.ApplyModifiedPropertiesWithoutUndo();
             }

@@ -36,7 +36,7 @@ public static class PostBuildProcessing
             {
                 ProcessCat(palletCat);
             }
-            catch (Exception e) 
+            catch (Exception e)
             {
                 UnityEngine.Debug.LogException(e);
             }
@@ -45,7 +45,7 @@ public static class PostBuildProcessing
     }
 
     private static AssetsManager CurManager;
-    static void ProcessCat(string catPath) 
+    static void ProcessCat(string catPath)
     {
         var localBundles = SearchForFiles(new FileInfo(catPath).Directory.FullName, ".bundle");
 
@@ -58,7 +58,7 @@ public static class PostBuildProcessing
         foreach (var localBundle in localBundles)
         {
             BundleItem.ResetCache();
-            
+
             // load local bundle into ram
             var ms = new MemoryStream();
             using (var fileStream = new FileStream(localBundle, FileMode.Open))
@@ -78,7 +78,7 @@ public static class PostBuildProcessing
                 subBundleIdxs[subBundle] = i;
                 CurManager.LoadClassDatabaseFromPackage(subBundle.file.Metadata.UnityVersion);
             }
-            
+
             // find first preloadTable
             BundleItem preloadTable = null;
             foreach (var ba in subBundles)
@@ -143,12 +143,14 @@ public static class PostBuildProcessing
                             neededAssets.Add(existingRemote);
                         }
 
-                        pendingChanges1.Add(new RemoteApplication()
-                        {
-                            Targ = targAsset,
-                            Asset = existingRemote,
-                            PropPath = curPrefab.Prop["BaseRefs.Array"][j]["propPath"].AsString
-                        });
+                        string propPath = curPrefab.Prop["BaseRefs.Array"][j]["propPath"].AsString;
+                        if (targAsset.ToProp(propPath, true).Prop["m_PathID"].AsLong != 0)
+                            pendingChanges1.Add(new RemoteApplication()
+                            {
+                                Targ = targAsset,
+                                Asset = existingRemote,
+                                PropPath = propPath
+                            });
                     }
                 }
 
@@ -156,9 +158,9 @@ public static class PostBuildProcessing
                 for (int m = 0; m < 2; m++)
                 {
                     string which = m == 0 ? "Records" : "PrefabModRecords";
-                    for (int i = 0; i < trackComp.Prop[which+".Array"].AsArray.size; i++)
+                    for (int i = 0; i < trackComp.Prop[which + ".Array"].AsArray.size; i++)
                     {
-                        AssetTypeValueField curRec = trackComp.Prop[which+".Array"][i];
+                        AssetTypeValueField curRec = trackComp.Prop[which + ".Array"][i];
 
                         string remoteCatPath = CatName2Path(curRec["CatalogName"].AsString);
                         string remoteBundlePath = Path.Combine(Directory.GetParent(remoteCatPath).FullName, curRec["PrimaryBundle"].AsString);
@@ -178,7 +180,7 @@ public static class PostBuildProcessing
                             neededAssets.Add(remoteAsset = new(remoteBundlePath, assetName, assetType, dependancies));
                         }
 
-                        pendingChanges2.Add(new() 
+                        pendingChanges2.Add(new()
                         {
                             Targ = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, curRec["Comp"])),
                             Asset = remoteAsset,
@@ -221,10 +223,10 @@ public static class PostBuildProcessing
 
                     BundleItem targProp = change.Targ.ToProp(change.PropPath, true);
                     targProp.Prop["m_FileID"].AsInt = change.Asset.FileIDs[targProp.Bundle];
-                    targProp.Prop["m_PathID"].AsLong = change.Asset.PathID; 
+                    targProp.Prop["m_PathID"].AsLong = change.Asset.PathID;
                     change.Targ.Save();
                 }
-            
+
 
             foreach (var ba in subBundles)
                 loadedLocalBundle.file.BlockAndDirInfo.DirectoryInfos[subBundleIdxs[ba]].SetNewData(ba.file);
@@ -264,15 +266,15 @@ public static class PostBuildProcessing
             FileName = Path.GetFullPath(@"Packages/com.holadivinus.seamlesscatalogs/CRCPatcher~/Example.exe"),
             Arguments = $" patchcrc \"{Path.GetFullPath(catPath)}\"",
             UseShellExecute = false,
-            RedirectStandardOutput = true, 
-            RedirectStandardError = true, 
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
             CreateNoWindow = true
         };
 
         using var process = Process.Start(startInfo);
         string output = process.StandardOutput.ReadToEnd();
         string error = process.StandardError.ReadToEnd();
-        process.WaitForExit(); 
+        process.WaitForExit();
     }
     private class BundleItem
     {
@@ -323,7 +325,7 @@ public static class PostBuildProcessing
             return new BundleItem(Bundle, Object, curProp);
         }
     }
-    private class RemoteAsset 
+    private class RemoteAsset
     {
         public RemoteAsset(string bunPath, string assetName, string assetType, List<string> depBuns) : this(new List<string>() { bunPath }, assetName, assetType, depBuns) { }
         public RemoteAsset(List<string> bunPathz, string assetName, string assetType, List<string> depBuns)
@@ -368,7 +370,7 @@ public static class PostBuildProcessing
             //if (Failure) Debug.LogException(new Exception("Failed to find cab for " + assetName + " in " + JsonConvert.SerializeObject(bunPathz.ToArray())));
 
         }
-        
+
 
         public string assetName;
         public string assetType;

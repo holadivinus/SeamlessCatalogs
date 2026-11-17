@@ -1,6 +1,6 @@
 {
     "name": "com.holadivinus.seamlesscatalogs",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "displayName": "Seamless Catalogs",
     "description": "Tool to allow developers to easily use Resources from external Addressable catalogs.",
     "unity": "2021.3",
