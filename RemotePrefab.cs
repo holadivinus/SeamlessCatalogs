@@ -26,6 +26,12 @@ namespace SeamlessCatalogs
         {
             isLoaded = false;
             midLoad = false;
+
+            if (PrefabUtility.GetCorrespondingObjectFromSource(gameObject) != null && !AssetDatabase.GetAssetPath(PrefabUtility.GetCorrespondingObjectFromSource(gameObject)).StartsWith("Assets/RemotePrefabs/"))
+            {
+                NullRefs();
+                LoadAsset();
+            }
         }
 
         bool isLoaded;
@@ -59,6 +65,7 @@ namespace SeamlessCatalogs
             CatalogEntry catE = cat.AllEntries.First(e => e.AssetType != null && e.Location.PrimaryKey == PrimaryKey);
             var remoteGobj = (GameObject)await catE.LoadAssetAsync(false, loadDelay: KnownLoadDelay);
             KnownLoadDelay = catE.onloadRequiredDelay;
+            if (this == null) return;
             foreach (var baseRef in BaseRefs)
             {
                 Component localComp = GetTargComp(gameObject, baseRef);

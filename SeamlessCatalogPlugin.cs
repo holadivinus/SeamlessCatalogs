@@ -95,7 +95,7 @@ namespace SeamlessCatalogs
         private static string FixupBundleLoad(IResourceLocation loc)
         {
             string locStr = loc.ToString();
-            if (locStr.Length > 2 && locStr[1] == ':') return locStr; 
+            if (locStr.Length > 2 && locStr[1] == ':') return locStr;
             if (loc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider")
             {
                 foreach (var cat in ExternalCatalog.ActiveCatalogs.Values)
@@ -110,11 +110,11 @@ namespace SeamlessCatalogs
                 return locStr;
             }
             return locStr;
-        } 
+        }
 
         private static void StartRemotePrefabDrag(GameObject g, CatalogEntry e)
         {
-            handlingDrag = true; 
+            handlingDrag = true;
             remoteDragPrefab = g;
             remoteDragEntry = e;
             DragAndDrop.AddDropHandler(dropy);
@@ -162,7 +162,7 @@ namespace SeamlessCatalogs
                 rp.Dependancies = remoteDragEntry.Location.Dependencies.Select(d => d.InternalId).ToList();
                 rp.CatalogName = remoteDragEntry.Catalog.Name;
                 MonoScript[] allMonoScripts = Resources.FindObjectsOfTypeAll<MonoScript>();
-                foreach (var c in gunkFab.GetComponentsInChildren<Component>(true)) 
+                foreach (var c in gunkFab.GetComponentsInChildren<Component>(true))
                 {
                     if (c == null) continue;
                     GameObject g = c.gameObject;
@@ -188,7 +188,7 @@ namespace SeamlessCatalogs
                     GameObjectUtility.RemoveMonoBehavioursWithMissingScript(g);
                 }
                 foreach (var c in gunkFab.GetComponentsInChildren<Component>(true))
-                    {
+                {
                     if (c == rp) continue;
                     GameObject curG = c.gameObject;
                     using var so = new SerializedObject(c);
@@ -198,8 +198,8 @@ namespace SeamlessCatalogs
                     {
                         if (c == null) break;
                         if (prop.propertyType != SerializedPropertyType.ObjectReference) continue;
-                        if (prop.propertyPath == "m_Script") 
-                            continue; 
+                        if (prop.propertyPath == "m_Script")
+                            continue;
                         if (prop.objectReferenceValue == null) continue;
                         if (prop.objectReferenceValue is Component comp && comp.gameObject.scene.IsValid()) continue;
                         if (prop.objectReferenceValue is GameObject g && g.scene.IsValid()) continue;
@@ -213,7 +213,7 @@ namespace SeamlessCatalogs
                             gP = gP.parent;
                         }
 
-                        
+
 
                         rp.BaseRefs.Add(new()
                         {
@@ -224,7 +224,7 @@ namespace SeamlessCatalogs
                             compIdx = Array.IndexOf(c.gameObject.GetComponents<Component>(), c),
                             propPath = prop.propertyPath
                         });
-                        if (prop.objectReferenceValue is ScriptableObject asSO) 
+                        if (prop.objectReferenceValue is ScriptableObject asSO)
                         {
                             MonoScript realVersion = allMonoScripts.FirstOrDefault(ms => !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(ms)) && ms.name == MonoScript.FromScriptableObject(asSO).name);
                             rp.UsedClasses.Add(realVersion);
@@ -282,7 +282,7 @@ namespace SeamlessCatalogs
 
         private static void EditorEvent()
         {
-            
+
         }
 
         public static SeamlessCatalogsConfig Config;
@@ -346,11 +346,11 @@ namespace SeamlessCatalogs
                 }
                 l.text = curLodStr;
             }
-            
+
 
             // This is some pretty shitty code
             // #bonelab ext-sdk !!!!!!
-            if (false && Directory.Exists("Packages/com.stresslevelzero.marrow.sdk.extended")) 
+            if (false && Directory.Exists("Packages/com.stresslevelzero.marrow.sdk.extended"))
             {
                 foreach (var palletPath in AssetDatabase.FindAssets("t:Pallet"))
                 {
@@ -360,7 +360,7 @@ namespace SeamlessCatalogs
                     var palDeps = (IList)_palletDependencies.GetValue(Pallet);
                     if (palDeps == null) continue;
                     List<object> DIE = new();
-                    foreach (var dep in palDeps) 
+                    foreach (var dep in palDeps)
                     {
                         if (dep == null) continue;
                         _depScannable ??= dep.GetType().GetField("_barcode", (BindingFlags)60);
@@ -408,7 +408,7 @@ namespace SeamlessCatalogs
     }
 }
 
-internal static class CatalogExtensions 
+internal static class CatalogExtensions
 {
     private static Type[] _ta = new Type[3];
     public static Type typeof_ProjectBrowser => _ta[0] ??= Type.GetType("UnityEditor.ProjectBrowser, UnityEditor");
@@ -480,7 +480,7 @@ internal static class CatalogExtensions
     {
         if (o == null) throw new ArgumentNullException(nameof(o));
         if (_methodInfos.TryGetValue((o.GetType(), memberName), out MethodInfo mi))
-            return mi.Invoke(o, arguments);
+            return mi.Invoke(o, arguments); 
         else
         {
             var methodInfo = AccessTools.FirstMethod(o.GetType(), m => m.Name == memberName);
@@ -499,7 +499,7 @@ internal static class CatalogExtensions
             var methodInfo = AccessTools.Method(o.GetType(), memberName, new Type[] { typeof(T) });
             if (methodInfo == null) throw new Exception($"Type {o.GetType().Name} does not contain Method " + memberName);
             _methodInfos[(o.GetType(), memberName)] = methodInfo;
-            return methodInfo.Invoke(o, arguments);
+            return methodInfo.Invoke(o, arguments); 
         }
     }
     public static object RRM<T, T2>(this object o, string memberName, params object[] arguments)
