@@ -26,40 +26,7 @@ namespace SeamlessCatalogs
             AsyncOperationHandle<IResourceLocator> theLoad;
             public void EditorUpdate()
             {
-#if !MARROW_SDK
-                if (!(File.Exists(Path) && Path.EndsWith(".json"))) 
-                    Active = false;
 
-                if (Active && !_loading && !_loaded) 
-                {
-                    _loading = true;
-
-                    theLoad = Addressables.LoadContentCatalogAsync(Path);
-                    theLoad.Completed += a =>
-                    {
-                        Debug.Log("Loaded Catalog " + Name);
-                        _loading = false;
-                        _loaded = true;
-                        catalog = a.Result;
-
-
-                        if (catalog is ResourceLocationMap rlm)
-                        {
-                            var newCat = ExternalCatalog.FromResourceLocationMap(rlm, Name);
-                            newCat.CatalogPath = System.IO.Path.GetFullPath(Path);
-                        }
-                    };
-                }
-                if (!Active && _loaded)
-                {
-                    Addressables.RemoveResourceLocator(catalog);
-                    _loaded = false;
-                    if (ExternalCatalog.ActiveCatalogs.TryGetValue(catalog, out ExternalCatalog ec))
-                        ec.Destroy();
-                    Debug.Log("Unloaded Catalog " + Name);
-                    
-                }
-#endif
             }
         }
 

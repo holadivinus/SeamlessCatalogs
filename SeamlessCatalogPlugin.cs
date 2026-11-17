@@ -24,6 +24,8 @@ namespace SeamlessCatalogs
         {
             //new BuiltCatalog(@"B:\GitHub\CatalogBorrower\BuiltPallets\StandaloneWindows64\holadivinus.BorrowerTests\catalog_holadivinus.BorrowerTests.json");
             //return;
+            EditorSettings.enableTextureStreamingInEditMode = false;
+            EditorSettings.enableTextureStreamingInPlayMode = false;
 
             // Unity Hookz!
             new Harmony("com.holadivinus.seamlesscatalogs").PatchAll();
