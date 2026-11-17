@@ -1,17 +1,25 @@
 #if UNITY_EDITOR
 using HarmonyLib;
 using System;
+using System.CodeDom;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Build.Pipeline;
 using UnityEditor.Compilation;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.AddressableAssets.ResourceLocators;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceLocations;
 using UnityEngine.ResourceManagement.ResourceProviders;
+using UnityEngine.SceneManagement;
+using UnityEngine.UIElements;
 
 namespace SeamlessCatalogs
 {
@@ -23,8 +31,6 @@ namespace SeamlessCatalogs
 
         static SeamlessCatalogPlugin()
         {
-            //new BuiltCatalog(@"B:\GitHub\CatalogBorrower\BuiltPallets\StandaloneWindows64\holadivinus.BorrowerTests\catalog_holadivinus.BorrowerTests.json");
-            //return; 
             EditorSettings.enableTextureStreamingInEditMode = false;
             EditorSettings.enableTextureStreamingInPlayMode = false;
 
@@ -35,30 +41,36 @@ namespace SeamlessCatalogs
             // If a domain reload happens, we need to kill loaded bundles
             AssetBundle.UnloadAllAssetBundles(true);
 
+
+            ShouldLoadAssets = false;
+
+            HookAddressables();
+        }
+        public static bool ShouldLoadAssets;
+        static void HookAddressables()
+        {
+
+            if (!File.Exists("Library/com.unity.addressables/aa/Windows/catalog.json") && Directory.Exists("Library/com.unity.addressables"))
+            {
+                Directory.Delete("Library/com.unity.addressables", true);
+            }
+
+            AsyncOperationHandle<IResourceLocator> startAddr = Addressables.InitializeAsync();
+
             // Ensure remote catalogs load correctly
-            Addressables.InitializeAsync().Completed += (e) => 
+            Action<AsyncOperationHandle<IResourceLocator>> onLoaded = async (e) =>
             {
                 _addressablesLoaded = true;
-                Addressables.InternalIdTransformFunc = loc =>
-                {
-                    string locStr = loc.ToString();
-                    if (locStr.Length > 2 && locStr[1] == ':') return locStr;
-                    if (loc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider")
-                    {
-                        foreach (var cat in ExternalCatalog.ActiveCatalogs.Values)
-                        {
-                            if (!cat.AllResources.Contains(loc)) continue;
 
-                            string catDir = new DirectoryInfo(cat.CatalogPath).Parent.FullName;
-                            string[] locBits = loc.InternalId.Replace('/', '\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
-                            locBits[0] = "";
-                            return catDir + string.Join('\\', locBits);
-                        }
-                        return locStr;
-                    }
-                    return locStr;
-                };
+#if !MARROW_SDK && !MARROW_SDK_EXT
+                Addressables.InternalIdTransformFunc = FixupBundleLoad;
+#endif
+                ShouldLoadAssets = true;
             };
+
+            if (startAddr.IsDone)
+                onLoaded.Invoke(startAddr);
+            else startAddr.Completed += onLoaded;
 
             Config = ScriptableObject.CreateInstance<SeamlessCatalogsConfig>();
             CompilationPipeline.compilationStarted += (a) => UnityEngine.Object.DestroyImmediate(Config);
@@ -78,12 +90,27 @@ namespace SeamlessCatalogs
                 EditorApplication.delayCall += PostBuildProcessing.ProcessOutputs;
                 return ReturnCode.Success;
             };
-
-
-            
         }
 
-        
+        private static string FixupBundleLoad(IResourceLocation loc)
+        {
+            string locStr = loc.ToString();
+            if (locStr.Length > 2 && locStr[1] == ':') return locStr; 
+            if (loc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider")
+            {
+                foreach (var cat in ExternalCatalog.ActiveCatalogs.Values)
+                {
+                    if (!cat.AllResources.Contains(loc)) continue;
+
+                    string catDir = new DirectoryInfo(cat.CatalogPath).Parent.FullName;
+                    string[] locBits = loc.InternalId.Replace('/', '\\').Split('\\', StringSplitOptions.RemoveEmptyEntries);
+                    locBits[0] = "";
+                    return catDir + string.Join('\\', locBits);
+                }
+                return locStr;
+            }
+            return locStr;
+        } 
 
         private static void StartRemotePrefabDrag(GameObject g, CatalogEntry e)
         {
@@ -271,6 +298,7 @@ namespace SeamlessCatalogs
 
         private static void EditorEvent()
         {
+            
         }
 
         public static SeamlessCatalogsConfig Config;
@@ -303,8 +331,68 @@ namespace SeamlessCatalogs
 
             if (handlingDrag && DragAndDrop.objectReferences.Length == 0)
                 EndRemotePrefabDrag();
+
+
+            string curLodStr = "";
+            foreach (var cl in CatalogEntry.CurLoaders)
+            {
+                if (curLodStr.Contains(cl.Location.InternalId)) continue;
+                if (!cl.LoadHandle.IsValid()) continue;
+                int pc = Mathf.RoundToInt(cl.LoadHandle.PercentComplete * 100);
+                if (pc == 100) continue;
+                if (cl.LoadHandle.Status == AsyncOperationStatus.Failed)
+                {
+                    curLodStr += cl.Location.InternalId + " loaded too early, Retrying...";
+                }
+                else curLodStr += cl.Location.InternalId + " " + pc + "%" + Environment.NewLine;
+            }
+            if (!string.IsNullOrEmpty(curLodStr))
+                curLodStr += "^ Loading Remote Assets ^";
+
+            foreach (SceneView sv in Resources.FindObjectsOfTypeAll<SceneView>())
+            {
+                Label l;
+                if (!SceneViewUIS.TryGetValue(sv, out l))
+                {
+                    SceneViewUIS[sv] = l = new Label("Haii1!!!");
+                    sv.rootVisualElement.Q("unity-scene-view-camera-rect").Add(l);
+                    l.style.position = Position.Absolute;
+                    l.style.bottom = 0;
+                    l.style.fontSize = 15;
+                }
+                l.text = curLodStr;
+            }
             
+
+            // This is some pretty shitty code
+            // #bonelab ext-sdk !!!!!!
+            if (false && Directory.Exists("Packages/com.stresslevelzero.marrow.sdk.extended")) 
+            {
+                foreach (var palletPath in AssetDatabase.FindAssets("t:Pallet"))
+                {
+                    var Pallet = AssetDatabase.LoadAssetAtPath<UnityEngine.ScriptableObject>(AssetDatabase.GUIDToAssetPath(palletPath));
+                    if (Pallet == null) continue;
+                    _palletDependencies ??= Pallet.GetType().GetField("_palletDependencies", (BindingFlags)60);
+                    var palDeps = (IList)_palletDependencies.GetValue(Pallet);
+                    if (palDeps == null) continue;
+                    List<object> DIE = new();
+                    foreach (var dep in palDeps) 
+                    {
+                        if (dep == null) continue;
+                        _depScannable ??= dep.GetType().GetField("_barcode", (BindingFlags)60);
+                        var res = _depScannable.GetValue(dep);
+                        if (res == null) continue;
+                        if (res.ToString() == "SLZ.Backlot")
+                            DIE.Add(dep);
+                    }
+                    foreach (var dep in DIE)
+                        palDeps.Remove(dep);
+                }
+            }
         }
+        private static FieldInfo _palletDependencies;
+        private static FieldInfo _depScannable;
+        static Dictionary<SceneView, Label> SceneViewUIS = new();
 
         private static void RemoveMissingScripts(GameObject g)
         {

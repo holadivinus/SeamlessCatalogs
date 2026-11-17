@@ -4,10 +4,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Unity.IO.LowLevel.Unsafe;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceLocations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 
@@ -20,6 +22,8 @@ namespace SeamlessCatalogs
     /// </summary>
     public class CatalogEntry
     {
+        public static List<CatalogEntry> CurLoaders = new();
+
         public string name;
 
         public static CatalogEntry NewEntry(string Name, Type type, ExternalCatalog catalog, List<CatalogEntry> children = null)
@@ -128,14 +132,18 @@ namespace SeamlessCatalogs
 
             foreach (var c in Children)
                 c?.Destroy();
+
+            CurLoaders.Remove(this);
         }
 
+        [NonSerialized] public AsyncOperationHandle<UnityEngine.Object> LoadHandle;
         [NonSerialized] public IResourceLocation Location;
         [NonSerialized] public UnityEngine.Object LoadedAsset;
+        [NonSerialized] public int onloadRequiredDelay;
         //[NonSerialized] public AssetBundle[] LoadedBundles;
 
         private static CatalogEntry mostRecentSelLoad;
-        public async Task<UnityEngine.Object> LoadAssetAsync(bool refreshPBMs = false)       
+        public async Task<UnityEngine.Object> LoadAssetAsync(bool refreshPBMs = false, int loadDelay = 0)       
         {
             if (Location == null) return null;
 
@@ -144,8 +152,29 @@ namespace SeamlessCatalogs
                 return LoadedAsset;
             else
             {
+                CurLoaders.Add(this);
                 if (refreshPBMs) mostRecentSelLoad = this;
-                LoadedAsset = await Addressables.LoadAssetAsync<UnityEngine.Object>(Location).Task;
+
+                int c = 0;
+                onloadRequiredDelay = loadDelay;
+                while (true)
+                {
+                    if (loadDelay != 0)
+                        await Task.Delay(loadDelay);
+                    LoadHandle = Addressables.LoadAssetAsync<UnityEngine.Object>(Location);
+                    while (!LoadHandle.IsDone) // no clue why this is faster than await LoadHandle.Task
+                        await Task.Delay(250);
+                    LoadedAsset = LoadHandle.Result;
+                    if (LoadHandle.Status == AsyncOperationStatus.Succeeded && LoadedAsset != null)
+                        break;
+
+                    // failed to load
+                    await Task.Delay(2000); //this sounds like a bad idea but it works sooooo
+                    onloadRequiredDelay += 2000;
+                    c++;
+                    if (c == 4) throw new Exception("Couldn't load remote asset: " + Location.InternalId);
+                }
+                
 
                 if (ExternalCatalog.RemoteAssets.TryGetValue(LoadedAsset, out List<CatalogEntry> assetEntries))
                     assetEntries.Add(this);
@@ -182,6 +211,7 @@ namespace SeamlessCatalogs
                     foreach (var pbm in ProjectBrowserManager.instances)
                         pbm.RepaintFolders();
 
+                CurLoaders.Remove(this);
                 return LoadedAsset;
             }
         }

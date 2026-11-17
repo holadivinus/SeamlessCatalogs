@@ -133,13 +133,10 @@ namespace SeamlessCatalogs
                     if (rat != this) rat.NullOutRecords();
             }
         }
-        private async void editorSceneManager_sceneSaved(Scene scene) 
+        public async void editorSceneManager_sceneSaved(Scene scene) 
         {
             if (loading) return;
             GameObject[] rootGobjs = scene.GetRootGameObjects().Where(rg => PrefabStageUtility.GetPrefabStage(rg) == null).ToArray();
-            foreach (var gobj in rootGobjs)
-                foreach (var rp in gobj.GetComponentsInChildren<RemotePrefab>(true))
-                    await rp.LoadAsset();
 
             foreach (var gobj in rootGobjs)
                 foreach (var rat in gobj.GetComponentsInChildren<RemoteAssetTracker>(true))
@@ -255,38 +252,15 @@ namespace SeamlessCatalogs
                 }
         }
         bool loading;
-        private async void FillInRecords() 
+        public async void FillInRecords() 
         {
             if (BuildPipeline.isBuildingPlayer || EditorApplication.isCompiling) return;
 
             loading = true;
+
+            // wait for all cats
             foreach (var r in Records)
             {
-                if (r.Comp == null) continue;
-
-                ExternalCatalog cat;
-                while (true) 
-                {
-                    cat = ExternalCatalog.ActiveCatalogs.Values.FirstOrDefault(cat => cat.Name == r.CatalogName);
-                    if (cat != null) break;
-                    await Task.Delay(250);
-                }
-
-                CatalogEntry entry = cat.AllEntries.First(e => e.Location != null && e.Location.PrimaryKey == r.PrimaryKey);
-                UnityEngine.Object obj = await entry.LoadAssetAsync();
-
-            
-                using var so = new SerializedObject(r.Comp);
-                var prop = so.FindProperty(r.PropPath);
-                if (prop == null) continue;
-
-                prop.objectReferenceValue = obj;
-                so.ApplyModifiedPropertiesWithoutUndo();
-            }
-            foreach (var r in PrefabModRecords)
-            {
-                if (r.Comp == null) continue;
-
                 ExternalCatalog cat;
                 while (true)
                 {
@@ -294,9 +268,57 @@ namespace SeamlessCatalogs
                     if (cat != null) break;
                     await Task.Delay(250);
                 }
+            }
+            // also prefab's cats
+            foreach (var p in Prefabs)
+            {
+                ExternalCatalog cat;
+                while (true)
+                {
+                    cat = ExternalCatalog.ActiveCatalogs.Values.FirstOrDefault(cat => cat.Name == p.CatalogName);
+                    if (cat != null) break;
+                    await Task.Delay(250);
+                }
+            }
+            while (!SeamlessCatalogPlugin.ShouldLoadAssets)
+                await Task.Delay(250);
 
+            List<Task> assetLoads = Prefabs.Select(p => p.LoadAsset()).ToList();
+            foreach (var r in Records)
+            {
+                RemoteLoadRecord curRec = r;
+                ExternalCatalog cat;
+                cat = ExternalCatalog.ActiveCatalogs.Values.FirstOrDefault(cat => cat.Name == r.CatalogName);
                 CatalogEntry entry = cat.AllEntries.First(e => e.Location != null && e.Location.PrimaryKey == r.PrimaryKey);
-                UnityEngine.Object obj = await entry.LoadAssetAsync();
+                assetLoads.Add(((Func<Task>)(async () =>
+                {
+                    UnityEngine.Object obj = await entry.LoadAssetAsync();
+
+                    using var so = new SerializedObject(r.Comp);
+                    var prop = so.FindProperty(r.PropPath);
+                    if (prop == null) return;
+
+                    prop.objectReferenceValue = obj;
+                    so.ApplyModifiedPropertiesWithoutUndo();
+                })).Invoke());
+            }
+            foreach (var r in PrefabModRecords)
+            {
+                ExternalCatalog cat = ExternalCatalog.ActiveCatalogs.Values.FirstOrDefault(cat => cat.Name == r.CatalogName);
+                CatalogEntry entry = cat.AllEntries.First(e => e.Location != null && e.Location.PrimaryKey == r.PrimaryKey);
+                assetLoads.Add(entry.LoadAssetAsync());
+            }
+
+            await Task.WhenAll(assetLoads);
+
+            
+            foreach (var r in PrefabModRecords)
+            {
+                if (r.Comp == null) continue;
+
+                ExternalCatalog cat = ExternalCatalog.ActiveCatalogs.Values.FirstOrDefault(cat => cat.Name == r.CatalogName);
+                CatalogEntry entry = cat.AllEntries.First(e => e.Location != null && e.Location.PrimaryKey == r.PrimaryKey);
+                UnityEngine.Object obj = entry.LoadedAsset;
 
 
                 using var so = new SerializedObject(r.Comp);

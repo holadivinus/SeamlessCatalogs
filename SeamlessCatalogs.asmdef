@@ -23,8 +23,13 @@
     "versionDefines": [
         {
             "name": "com.stresslevelzero.marrow.sdk",
-            "expression": "",
+            "expression": "0.0.0",
             "define": "MARROW_SDK"
+        },
+        {
+            "name": "com.stresslevelzero.marrow.sdk.extended",
+            "expression": "0.0.0",
+            "define": "MARROW_SDK_EXT"
         }
     ],
     "noEngineReferences": false

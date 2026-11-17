@@ -9,8 +9,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.SceneManagement;
 using static BuiltCatalog;
 
 public static class PostBuildProcessing
@@ -41,6 +43,7 @@ public static class PostBuildProcessing
                 UnityEngine.Debug.LogException(e);
             }
         }
+           
         EditorApplication.delayCall += () => EditorUtility.RequestScriptReload();
     }
 

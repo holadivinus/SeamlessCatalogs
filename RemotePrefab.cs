@@ -24,22 +24,23 @@ namespace SeamlessCatalogs
 
         private void OnEnable()
         {
-            if (PrefabUtility.IsPartOfPrefabInstance(this))
-                LoadAsset();
+            isLoaded = false;
+            midLoad = false;
         }
 
         bool isLoaded;
         bool midLoad;
+        public int KnownLoadDelay;
         public async Task LoadAsset()
         {
             if (midLoad)
-            {
                 while (true)
                 {
                     await Task.Delay(250);
-                    if (!midLoad) return;
+                    if (!midLoad)
+                        return;
                 }
-            }
+
             if (isLoaded) return;
             isLoaded = true;
             midLoad = true;
@@ -52,8 +53,12 @@ namespace SeamlessCatalogs
                 await Task.Delay(250);
             }
 
+            while (!SeamlessCatalogPlugin.ShouldLoadAssets) 
+                await Task.Delay(250);
 
-            var remoteGobj = (GameObject)await cat.AllEntries.First(e => e.AssetType != null && e.Location.PrimaryKey == PrimaryKey).LoadAssetAsync();
+            CatalogEntry catE = cat.AllEntries.First(e => e.AssetType != null && e.Location.PrimaryKey == PrimaryKey);
+            var remoteGobj = (GameObject)await catE.LoadAssetAsync(false, loadDelay: KnownLoadDelay);
+            KnownLoadDelay = catE.onloadRequiredDelay;
             foreach (var baseRef in BaseRefs)
             {
                 Component localComp = GetTargComp(gameObject, baseRef);
