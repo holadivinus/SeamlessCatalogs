@@ -12,8 +12,8 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 #endif
 
-namespace SeamlessCatalogs 
-{ 
+namespace SeamlessCatalogs
+{
     [ExecuteAlways]
     public class RemoteAssetTracker : MonoBehaviour
     {
@@ -31,7 +31,7 @@ namespace SeamlessCatalogs
             {
                 RemoteAssetTracker o = prefabStage.prefabContentsRoot.transform.Find(REMOTE_STR)?.gameObject.GetComponent<RemoteAssetTracker>();
                 if (o != null) return o;
-                o = new GameObject(REMOTE_STR, typeof(RemoteAssetTracker)).GetComponent<RemoteAssetTracker>(); 
+                o = new GameObject(REMOTE_STR, typeof(RemoteAssetTracker)).GetComponent<RemoteAssetTracker>();
                 o.transform.SetParent(prefabStage.prefabContentsRoot.transform);
                 o.AssetPath = prefabStage.assetPath;
                 return o;
@@ -57,7 +57,7 @@ namespace SeamlessCatalogs
             this.transform.hideFlags = h;
         }
 
-    
+
 
         bool inPrefab;
         bool isPrefabInstance;
@@ -71,7 +71,8 @@ namespace SeamlessCatalogs
             {
                 EditorSceneManager.sceneSaving += editorSceneManager_sceneSaving;
                 EditorSceneManager.sceneSaved += editorSceneManager_sceneSaved;
-            } else
+            }
+            else
             {
                 if (!isPrefabInstance)
                 {
@@ -133,7 +134,7 @@ namespace SeamlessCatalogs
                     if (rat != this) rat.NullOutRecords();
             }
         }
-        public async void editorSceneManager_sceneSaved(Scene scene) 
+        public async void editorSceneManager_sceneSaved(Scene scene)
         {
             if (loading) return;
             GameObject[] rootGobjs = scene.GetRootGameObjects().Where(rg => PrefabStageUtility.GetPrefabStage(rg) == null).ToArray();
@@ -199,7 +200,7 @@ namespace SeamlessCatalogs
                 {
                     Records.Remove(r); continue;
                 }
-                using var so = new SerializedObject(r.Comp); 
+                using var so = new SerializedObject(r.Comp);
                 var prop = so.FindProperty(r.PropPath);
 
                 if (prop == null || prop.objectReferenceValue == null)
@@ -215,7 +216,7 @@ namespace SeamlessCatalogs
             EditorUtility.SetDirty(this);
         }
 
-        [ContextMenu("nully")] 
+        [ContextMenu("nully")]
         private void NullOutRecords()
         {
             foreach (var r in Records)
@@ -252,7 +253,7 @@ namespace SeamlessCatalogs
                 }
         }
         bool loading;
-        public async void FillInRecords() 
+        public async void FillInRecords()
         {
             if (BuildPipeline.isBuildingPlayer || EditorApplication.isCompiling) return;
 
@@ -272,6 +273,7 @@ namespace SeamlessCatalogs
             // also prefab's cats
             foreach (var p in Prefabs)
             {
+                if (p == null) continue;
                 ExternalCatalog cat;
                 while (true)
                 {
@@ -311,7 +313,6 @@ namespace SeamlessCatalogs
 
             await Task.WhenAll(assetLoads);
 
-            
             foreach (var r in PrefabModRecords)
             {
                 if (r.Comp == null) continue;
@@ -372,7 +373,7 @@ namespace SeamlessCatalogs
                     }
                 }
             }
-            EditorUtility.SetDirty(this); 
+            EditorUtility.SetDirty(this);
         }
 
         private void OnDisable()
@@ -381,7 +382,8 @@ namespace SeamlessCatalogs
             {
                 EditorSceneManager.sceneSaving -= editorSceneManager_sceneSaving;
                 EditorSceneManager.sceneSaved -= editorSceneManager_sceneSaved;
-            } else
+            }
+            else
             {
                 if (!isPrefabInstance)
                 {

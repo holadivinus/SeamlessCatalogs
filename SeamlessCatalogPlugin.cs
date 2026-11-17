@@ -248,24 +248,6 @@ namespace SeamlessCatalogs
                 PrefabUtility.SaveAsPrefabAsset(gunkFab, gunkfabPath);
 
                 UnityEngine.Object.DestroyImmediate(gunkFab);
-
-                ((Action)(async () => 
-                {
-                    foreach (IResourceLocation loc in remoteDragEntry.Location.Dependencies)
-                    {
-                        IAssetBundleResource bun = await Addressables.LoadAssetAsync<IAssetBundleResource>(loc).Task;
-                        AssetBundle b = bun.GetAssetBundle();
-                        Debug.Log(loc.InternalId);
-                        Debug.Log(loc.PrimaryKey);
-                        foreach (var item in b.GetAllAssetNames())
-                        {
-                        Debug.Log(item);
-
-                        }
-                    }
-                }))();
-                
-
             }
 
             if (localDragPrefabInstance == null)
@@ -280,6 +262,8 @@ namespace SeamlessCatalogs
                 curDragCols = localDragPrefabInstance.GetComponentsInChildren<Collider>().Where(c => c.enabled).ToArray();
                 foreach (var c in curDragCols)
                     c.enabled = false;
+
+                localDragPrefabInstance.GetComponent<RemotePrefab>().LoadAsset();
             }
 
             localDragPrefabInstance.transform.SetParent(parentForDraggedObjects, true);
