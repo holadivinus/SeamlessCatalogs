@@ -11,6 +11,7 @@ using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.ResourceLocations;
+using UnityEngine.ResourceManagement.ResourceProviders;
 
 namespace SeamlessCatalogs
 {
@@ -23,7 +24,7 @@ namespace SeamlessCatalogs
         static SeamlessCatalogPlugin()
         {
             //new BuiltCatalog(@"B:\GitHub\CatalogBorrower\BuiltPallets\StandaloneWindows64\holadivinus.BorrowerTests\catalog_holadivinus.BorrowerTests.json");
-            //return;
+            //return; 
             EditorSettings.enableTextureStreamingInEditMode = false;
             EditorSettings.enableTextureStreamingInPlayMode = false;
 
@@ -35,7 +36,7 @@ namespace SeamlessCatalogs
             AssetBundle.UnloadAllAssetBundles(true);
 
             // Ensure remote catalogs load correctly
-            Addressables.InitializeAsync().Completed += (e) =>
+            Addressables.InitializeAsync().Completed += (e) => 
             {
                 _addressablesLoaded = true;
                 Addressables.InternalIdTransformFunc = loc =>
@@ -79,14 +80,14 @@ namespace SeamlessCatalogs
             };
 
 
-
+            
         }
 
-
+        
 
         private static void StartRemotePrefabDrag(GameObject g, CatalogEntry e)
         {
-            handlingDrag = true;
+            handlingDrag = true; 
             remoteDragPrefab = g;
             remoteDragEntry = e;
             DragAndDrop.AddDropHandler(dropy);
@@ -134,8 +135,34 @@ namespace SeamlessCatalogs
                 rp.Dependancies = remoteDragEntry.Location.Dependencies.Select(d => d.InternalId).ToList();
                 rp.CatalogName = remoteDragEntry.Catalog.Name;
                 MonoScript[] allMonoScripts = Resources.FindObjectsOfTypeAll<MonoScript>();
-                foreach (var c in gunkFab.GetComponentsInChildren<Component>(true))
+                foreach (var c in gunkFab.GetComponentsInChildren<Component>(true)) 
                 {
+                    if (c == null) continue;
+                    GameObject g = c.gameObject;
+                    using var so1 = new SerializedObject(c);
+                    var scripPrip = so1.FindProperty("m_Script");
+                    if (scripPrip != null && string.IsNullOrEmpty(AssetDatabase.GetAssetPath(scripPrip.objectReferenceValue)))
+                    {
+                        // gotta swap this to a real script
+                        MonoScript fakeVersion = (MonoScript)scripPrip.objectReferenceValue;
+                        MonoScript realVersion = allMonoScripts.FirstOrDefault(ms => !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(ms)) && ms.name == fakeVersion.name);
+                        so1.Update();
+                        if (realVersion != null)
+                        {
+                            scripPrip.objectReferenceValue = realVersion;
+                            so1.ApplyModifiedPropertiesWithoutUndo();
+                        }
+                        else
+                        {
+                            scripPrip.objectReferenceValue = null;
+                            so1.ApplyModifiedPropertiesWithoutUndo();
+                        }
+                    }
+                    GameObjectUtility.RemoveMonoBehavioursWithMissingScript(g);
+                }
+                foreach (var c in gunkFab.GetComponentsInChildren<Component>(true))
+                    {
+                    if (c == rp) continue;
                     GameObject curG = c.gameObject;
                     using var so = new SerializedObject(c);
                     bool dirt = false;
@@ -144,31 +171,12 @@ namespace SeamlessCatalogs
                     {
                         if (c == null) break;
                         if (prop.propertyType != SerializedPropertyType.ObjectReference) continue;
-                        if (prop.propertyPath == "m_Script")
-                        {
-                            if (!string.IsNullOrEmpty(AssetDatabase.GetAssetPath(prop.objectReferenceValue))) continue;
-                            // gotta swap this to a real script
-                            MonoScript fakeVersion = (MonoScript)prop.objectReferenceValue;
-                            MonoScript realVersion = allMonoScripts.FirstOrDefault(ms => !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(ms)) && ms.name == fakeVersion.name);
-                            so.Update();
-                            if (realVersion != null)
-                            {
-                                prop.objectReferenceValue = realVersion;
-                                so.ApplyModifiedPropertiesWithoutUndo();
-                            }
-                            else
-                            {
-                                prop.objectReferenceValue = null;
-                                so.ApplyModifiedPropertiesWithoutUndo();
-                                break;
-                            }
-                            continue;
-                        }
+                        if (prop.propertyPath == "m_Script") 
+                            continue; 
                         if (prop.objectReferenceValue == null) continue;
                         if (prop.objectReferenceValue is Component comp && comp.gameObject.scene.IsValid()) continue;
                         if (prop.objectReferenceValue is GameObject g && g.scene.IsValid()) continue;
 
-                        if (c == null) break;
                         // get path to gobj
                         List<int> gPath = new();
                         Transform gP = c.transform;
@@ -177,6 +185,8 @@ namespace SeamlessCatalogs
                             gPath.Insert(0, gP.GetSiblingIndex());
                             gP = gP.parent;
                         }
+
+                        
 
                         rp.BaseRefs.Add(new()
                         {
@@ -187,6 +197,11 @@ namespace SeamlessCatalogs
                             compIdx = Array.IndexOf(c.gameObject.GetComponents<Component>(), c),
                             propPath = prop.propertyPath
                         });
+                        if (prop.objectReferenceValue is ScriptableObject asSO) 
+                        {
+                            MonoScript realVersion = allMonoScripts.FirstOrDefault(ms => !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(ms)) && ms.name == MonoScript.FromScriptableObject(asSO).name);
+                            rp.UsedClasses.Add(realVersion);
+                        }
 
                         so.Update();
                         prop.objectReferenceValue = null;
@@ -200,11 +215,30 @@ namespace SeamlessCatalogs
                     if (c == null)
                         GameObjectUtility.RemoveMonoBehavioursWithMissingScript(curG);
                 }
+                rp.UsedClasses = rp.UsedClasses.Distinct().ToList();
 
 
                 PrefabUtility.SaveAsPrefabAsset(gunkFab, gunkfabPath);
 
                 UnityEngine.Object.DestroyImmediate(gunkFab);
+
+                ((Action)(async () => 
+                {
+                    foreach (IResourceLocation loc in remoteDragEntry.Location.Dependencies)
+                    {
+                        IAssetBundleResource bun = await Addressables.LoadAssetAsync<IAssetBundleResource>(loc).Task;
+                        AssetBundle b = bun.GetAssetBundle();
+                        Debug.Log(loc.InternalId);
+                        Debug.Log(loc.PrimaryKey);
+                        foreach (var item in b.GetAllAssetNames())
+                        {
+                        Debug.Log(item);
+
+                        }
+                    }
+                }))();
+                
+
             }
 
             if (localDragPrefabInstance == null)
@@ -269,7 +303,7 @@ namespace SeamlessCatalogs
 
             if (handlingDrag && DragAndDrop.objectReferences.Length == 0)
                 EndRemotePrefabDrag();
-
+            
         }
 
         private static void RemoveMissingScripts(GameObject g)
@@ -302,7 +336,7 @@ namespace SeamlessCatalogs
     }
 }
 
-internal static class CatalogExtensions
+internal static class CatalogExtensions 
 {
     private static Type[] _ta = new Type[3];
     public static Type typeof_ProjectBrowser => _ta[0] ??= Type.GetType("UnityEditor.ProjectBrowser, UnityEditor");

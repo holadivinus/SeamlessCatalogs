@@ -16,6 +16,7 @@ namespace SeamlessCatalogs
         public string PrimaryKey;
         public string CatalogName;
         public List<string> Dependancies;
+        public List<Object> UsedClasses = new();
 #if UNITY_EDITOR
         private void Awake()
         {
@@ -62,6 +63,7 @@ namespace SeamlessCatalogs
                 var localProp = localSO.FindProperty(baseRef.propPath);
                 using var remoteSO = new SerializedObject(remoteComp);
                 var remoteProp = remoteSO.FindProperty(baseRef.propPath);
+
 
                 localSO.Update();
                 if (localProp.objectReferenceValue == null)
