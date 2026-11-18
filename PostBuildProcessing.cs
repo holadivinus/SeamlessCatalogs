@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Assertions.Must;
 
 public static class PostBuildProcessing
 {
@@ -53,6 +54,7 @@ public static class PostBuildProcessing
         Dictionary<string, List<string>> localAsset2DependenciesIDs = new();
         Dictionary<string, string> DependencyID2CatalogPath = new();
         Dictionary<AssetsFileInstance, int> subBundleIdxs = new();
+        AssetsFileInstance scriptsBundle = null;
         foreach (var localBundle in localBundles)
         {
             BundleItem.ResetCache();
@@ -65,7 +67,7 @@ public static class PostBuildProcessing
             }
             ms.Position = 0;
             BundleFileInstance loadedLocalBundle = CurManager.LoadBundleFile(ms, localBundle, true);
-
+            
             // Load each sub-bundle
             List<AssetsFileInstance> subBundles = new();
             for (int i = 0; i < loadedLocalBundle.file.BlockAndDirInfo.DirectoryInfos.Count; i++)
@@ -76,6 +78,9 @@ public static class PostBuildProcessing
                 subBundleIdxs[subBundle] = i;
                 CurManager.LoadClassDatabaseFromPackage(subBundle.file.Metadata.UnityVersion);
             }
+            bool isScriptsBundle = localBundle.EndsWith("monoscripts.bundle");
+            if (isScriptsBundle)
+                scriptsBundle = subBundles[0];
             
             // find first preloadTable
             BundleItem preloadTable = null;
@@ -154,7 +159,23 @@ public static class PostBuildProcessing
                         }
                         catch (DummyFieldAccessException ex) 
                         {
-                            Debug.LogError("Couldn't find prop on , likely null: " + assetType + " " + assetName + "." + propPath);
+                            Debug.LogError($"Couldn't find prop on {(AssetClassID)targAsset.Object.TypeId}, likely null: " + assetType + " " + assetName + "." + propPath);
+                            if ((AssetClassID)targAsset.Object.TypeId == AssetClassID.MonoBehaviour)
+                            {
+                                try
+                                {
+                                    long missing = targAsset.Prop["m_Script"]["m_PathID"].AsLong;
+                                    AssetFileInfo monoScrip = scriptsBundle.file.GetAssetsOfType(AssetClassID.MonoScript).FirstOrDefault(a => a.PathId == missing);
+                                    Debug.Log("whats got missing: " + monoScrip == null ? missing : CurManager.GetBaseField(scriptsBundle, monoScrip)["m_Name"].AsString);
+                                }
+                                catch (Exception e)
+                                {
+                                    Debug.LogError("couldn't get the monobehaviours name :/");
+                                    Debug.LogException(e);
+                                }
+                            }
+
+
                             shouldSet = false;
                         }
 
@@ -290,7 +311,21 @@ public static class PostBuildProcessing
                         targProp = change.Targ.ToProp(change.PropPath, true);
                     }catch (DummyFieldAccessException ex)
                     {
-                        Debug.LogError("Couldn't find prop, likely null: " + change.Asset.assetType + " " + change.Asset.assetName + "." + change.PropPath);
+                        Debug.LogError($"Couldn't find prop on {(AssetClassID)change.Targ.Object.TypeId}, likely null: " + change.Asset.assetType + " " + change.Asset.assetName + "." + change.PropPath);
+                        if ((AssetClassID)change.Targ.Object.TypeId == AssetClassID.MonoBehaviour)
+                        {
+                            try
+                            {
+                                long missing = change.Targ.Prop["m_Script"]["m_PathID"].AsLong;
+                                AssetFileInfo monoScrip = scriptsBundle.file.GetAssetsOfType(AssetClassID.MonoScript).FirstOrDefault(a => a.PathId == missing);
+                                Debug.Log("whats got missing: " + monoScrip == null ? missing : CurManager.GetBaseField(scriptsBundle, monoScrip)["m_Name"].AsString);
+                            }
+                            catch(Exception e)
+                            {
+                                Debug.LogError("couldn't get the monobehaviours name :/");
+                                Debug.LogException(e);
+                            }
+                        }
                         continue;
                     }
 
@@ -309,9 +344,11 @@ public static class PostBuildProcessing
                 loadedLocalBundle.file.Write(bundleWriter);
             }
 
-            CurManager.UnloadBundleFile(loadedLocalBundle);
+            if (!isScriptsBundle)
+                CurManager.UnloadBundleFile(loadedLocalBundle);
         }
 
+        CurManager.UnloadBundleFile(scriptsBundle.parentBundle);
         CurManager.UnloadAll(true);
         CurManager = null;
 
@@ -375,26 +412,21 @@ public static class PostBuildProcessing
         public BundleItem ToProp(string propStr, bool containsArrays = false)
         {
             if (!containsArrays) return new BundleItem(Bundle, Object, Prop[propStr]);
+            Debug.Log(propStr);
 
-            string[] pathBits = propStr.Split("Array.data", System.StringSplitOptions.RemoveEmptyEntries);
-            if (pathBits.Length == 1) return new BundleItem(Bundle, Object, Prop[propStr]);
-
-            AssetTypeValueField curProp = Prop[pathBits[0] + "Array"];
-            for (int i = 1; i < pathBits.Length; i++)
+            AssetTypeValueField curP = Prop;
+            string[] propOps = propStr.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var propOp in propOps)
             {
-                string curPathBit = pathBits[i];
-                string postArrPath = pathBits[i].Split(']')[1];
-
-                int idx = int.Parse(pathBits[i].Split(']')[0].Substring(1));
-                curProp = curProp[idx];
-
-                if (i != pathBits.Length - 1)
-                    postArrPath += "Array";
-
-                if (!string.IsNullOrWhiteSpace(postArrPath))
-                    curProp = curProp[postArrPath];
+                if (propOp.StartsWith("data") && propOp.EndsWith(']'))
+                {
+                    int idx = int.Parse(propOp.Replace("data[", "").Replace("]", ""));
+                    curP = curP[idx];
+                    continue;
+                }
+                curP = curP[propOp];
             }
-            return new BundleItem(Bundle, Object, curProp);
+            return new BundleItem(Bundle, Object, curP);
         }
     }
     private class RemoteAsset 
