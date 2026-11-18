@@ -13,7 +13,7 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "0Harmony.dll",
+        "SC_0Harmony.dll",
         "Newtonsoft.Json.dll",
         "AssetsTools.NET.dll"
     ],

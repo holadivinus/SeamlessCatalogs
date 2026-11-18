@@ -147,7 +147,16 @@ public static class PostBuildProcessing
                         }
 
                         string propPath = curPrefab.Prop["BaseRefs.Array"][j]["propPath"].AsString;
-                        bool shouldSet = targAsset.ToProp(propPath, true).Prop["m_PathID"].AsLong == 0;
+                        bool shouldSet;
+                        try
+                        {
+                            shouldSet = targAsset.ToProp(propPath, true).Prop["m_PathID"].AsLong == 0;
+                        }
+                        catch (DummyFieldAccessException ex) 
+                        {
+                            Debug.LogError("Couldn't find prop on , likely null: " + assetType + " " + assetName + "." + propPath);
+                            shouldSet = false;
+                        }
 
                         if (!shouldSet)
                             UnityEngine.Debug.Log("not changing " + assetType + " " + assetName + "." + propPath);
@@ -274,7 +283,17 @@ public static class PostBuildProcessing
                     if (change.Asset.Failure || change.DontChange) continue;
 
                     change.Asset.RegisterAsDependancy(change.Targ.Bundle);
-                    BundleItem targProp = change.Targ.ToProp(change.PropPath, true);
+                    BundleItem targProp;
+
+                    try
+                    {
+                        targProp = change.Targ.ToProp(change.PropPath, true);
+                    }catch (DummyFieldAccessException ex)
+                    {
+                        Debug.LogError("Couldn't find prop, likely null: " + change.Asset.assetType + " " + change.Asset.assetName + "." + change.PropPath);
+                        continue;
+                    }
+
                     targProp.Prop["m_FileID"].AsInt = change.Asset.FileIDs[targProp.Bundle];
                     targProp.Prop["m_PathID"].AsLong = change.Asset.PathID;
                     change.Targ.Save();
