@@ -5,15 +5,10 @@ using Newtonsoft.Json;
 using SeamlessCatalogs;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.SceneManagement;
-using static BuiltCatalog;
 
 public static class PostBuildProcessing
 {
@@ -91,7 +86,15 @@ public static class PostBuildProcessing
                 preloadTable = new BundleItem(ba, pt, CurManager.GetBaseField(ba, pt));
                 break;
             }
-            //if (preloadTable == null) continue; // currently we'll just support scenes (& prefabs ?)
+            // find first AssetBundle
+            BundleItem serializedBundle = null;
+            foreach (var ba in subBundles)
+            {
+                var sb = ba.file.GetAssetsOfType(AssetClassID.AssetBundle).FirstOrDefault();
+                if (sb == null) continue;
+                serializedBundle = new BundleItem(ba, sb, CurManager.GetBaseField(ba, sb));
+                break;
+            }
 
             // get list of RemoteAssetTrackers
             BundleItem[] trackers = subBundles.SelectMany(ba => ba.file.GetAssetsOfType(AssetClassID.GameObject)
@@ -111,11 +114,8 @@ public static class PostBuildProcessing
 
                 localAssetPaths.Add(trackComp.Prop["AssetPath"].AsString);
 
-                // Get RemotePrefab's RemoteAssets
-                for (int i = 0; i < trackComp.Prop["Prefabs.Array"].AsArray.size; i++)
+                void handlePrefab(BundleItem curPrefab)
                 {
-                    BundleItem curPrefab = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, trackComp.Prop["Prefabs.Array"][i]));
-
                     // determine the RemoteAssets this prefab demands
 
                     // get this prefab's bundlepaths
@@ -127,7 +127,7 @@ public static class PostBuildProcessing
                         string depID = curPrefab.Prop["Dependancies.Array"][j].AsString;
                         dependancyIDs.Add(depID);
                         string remotePrefabBundlePath = Path.Combine(Directory.GetParent(prefabCatPath).FullName, curPrefab.Prop["Dependancies.Array"][j].AsString.Split(":\\")[1]);
-                        dependancyPaths.Add(remotePrefabBundlePath); 
+                        dependancyPaths.Add(remotePrefabBundlePath);
 
                         DependencyID2CatalogPath[depID] = prefabCatPath;
                     }
@@ -158,6 +158,25 @@ public static class PostBuildProcessing
                             PropPath = propPath,
                             DontChange = !shouldSet
                         });
+                    }
+                }
+                // Get RemotePrefab's RemoteAssets
+                for (int i = 0; i < trackComp.Prop["Prefabs.Array"].AsArray.size; i++)
+                {
+                    BundleItem curPrefab = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, trackComp.Prop["Prefabs.Array"][i]));
+                    handlePrefab(curPrefab);
+                }
+                if (trackComp.Prop.Children.First(c => string.Compare(c.FieldName, "IsPrefabsTracker") == 0).AsBool) 
+                {
+                    var ratGobj = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, trackComp.Prop["m_GameObject"]));
+                    var transf = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, ratGobj.Prop["m_Component.Array"][0]["component"]));
+                    var father = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, transf.Prop["m_Father"]));
+                    var prefabRoot = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, father.Prop["m_GameObject"]));
+                    for (int i = 0; i < prefabRoot.Prop["m_Component.Array"].AsArray.size; i++)
+                    {
+                        var curComp = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, prefabRoot.Prop["m_Component.Array"][i]["component"]));
+                        if (!curComp.Prop.Children.Any(c => c.FieldName == "BaseRefs") && !curComp.Prop.Children.Any(c => c.FieldName == "UsedClasses")) continue;
+                        handlePrefab(curComp);
                     }
                 }
 
@@ -226,6 +245,26 @@ public static class PostBuildProcessing
                 }
                 preloadTable.Save();
             }
+            if (serializedBundle != null)
+            {
+                var preloadArr = serializedBundle.Prop["m_PreloadTable.Array"];
+                var preloadArr2 = serializedBundle.Prop["m_Dependencies.Array"];
+                foreach (RemoteAsset ra in neededAssets)
+                {
+                    if (ra.Failure) continue;
+
+                    ra.RegisterAsDependancy(serializedBundle.Bundle);
+                    var newArrItem = ValueBuilder.DefaultValueFieldFromArrayTemplate(preloadArr);
+                    newArrItem["m_FileID"].AsInt = ra.FileIDs[serializedBundle.Bundle];
+                    newArrItem["m_PathID"].AsLong = ra.PathID;
+                    preloadArr.Children.Add(newArrItem);
+
+                    var newArrItem2 = ValueBuilder.DefaultValueFieldFromArrayTemplate(preloadArr2);
+                    newArrItem2.AsString = ra.CAB.ToLower();
+                    preloadArr2.Children.Add(newArrItem2);
+                }
+                serializedBundle.Save();
+            }
 
             // all sub-bundles ref assets & the preload table is full!
             // now we just gotta enforce the records
@@ -275,7 +314,7 @@ public static class PostBuildProcessing
 
 
 
-        var startInfo = new ProcessStartInfo
+        var startInfo = new System.Diagnostics.ProcessStartInfo
         {
             FileName = Path.GetFullPath(@"Packages/com.holadivinus.seamlesscatalogs/CRCPatcher~/Example.exe"),
             Arguments = $" patchcrc \"{Path.GetFullPath(catPath)}\"",
@@ -285,7 +324,7 @@ public static class PostBuildProcessing
             CreateNoWindow = true
         };
 
-        using var process = Process.Start(startInfo);
+        using var process = System.Diagnostics.Process.Start(startInfo);
         string output = process.StandardOutput.ReadToEnd();
         string error = process.StandardError.ReadToEnd();
         process.WaitForExit(); 

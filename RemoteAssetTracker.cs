@@ -21,6 +21,7 @@ namespace SeamlessCatalogs
         [SerializeField] List<RemotePrefabModificationLoadRecord> PrefabModRecords = new();
         [SerializeField] string AssetPath;
         [SerializeField] List<RemotePrefab> Prefabs = new();
+        public bool IsPrefabsTracker;
 
 #if UNITY_EDITOR
         public const string REMOTE_STR = "REMOTE_ASSET_TRACKER[9739799856]";
@@ -34,6 +35,7 @@ namespace SeamlessCatalogs
                 o = new GameObject(REMOTE_STR, typeof(RemoteAssetTracker)).GetComponent<RemoteAssetTracker>(); 
                 o.transform.SetParent(prefabStage.prefabContentsRoot.transform);
                 o.AssetPath = prefabStage.assetPath;
+                o.IsPrefabsTracker = true;
                 return o;
             }
 
@@ -57,7 +59,6 @@ namespace SeamlessCatalogs
             this.transform.hideFlags = h;
         }
 
-    
 
         bool inPrefab;
         bool isPrefabInstance;
@@ -75,7 +76,6 @@ namespace SeamlessCatalogs
             {
                 if (!isPrefabInstance)
                 {
-                    Debug.Log("good");
                     PrefabStage.prefabSaving += prefabStage_prefabSaving;
                     PrefabStage.prefabSaved += prefabStage_prefabSaved;
                 }
@@ -148,9 +148,7 @@ namespace SeamlessCatalogs
 
         private void RecordRemoteAssets(IEnumerable<GameObject> gobjs)
         {
-            Debug.Log("a");
             if (BuildPipeline.isBuildingPlayer || EditorApplication.isCompiling || loading) return;
-            Debug.Log("b");
 
             List<UnityEngine.Object> dirtComps = new List<UnityEngine.Object>();
             foreach (GameObject rootGobj in gobjs)
@@ -158,25 +156,17 @@ namespace SeamlessCatalogs
                     if (inPrefab || EditorUtility.IsDirty(c))
                         dirtComps.Add(c);
 
-            Debug.Log("c");
             if (!inPrefab)
-            {
                 dirtComps.Add(typeof(RenderSettings).GetMethod("GetRenderSettings", (System.Reflection.BindingFlags)60).Invoke(null, null) as UnityEngine.Object);
-            }
 
-            Debug.Log("d"); 
             foreach (var dc in dirtComps)
             {
-                Debug.Log("e");
-                Debug.Log(dc);
                 if (dc == null || dc is RemoteAssetTracker) continue;
-                Debug.Log("lol");
 
                 if (PrefabStageUtility.GetPrefabStage(gameObject) == null && PrefabUtility.IsPartOfPrefabInstance(dc))
                 {
                     continue;
                 }
-                Debug.Log("spumbob");
                 using var so = new SerializedObject(dc);
                 var prop = so.GetIterator();
                 while (prop.NextVisible(true))
@@ -212,11 +202,11 @@ namespace SeamlessCatalogs
                 using var so = new SerializedObject(r.Comp); 
                 var prop = so.FindProperty(r.PropPath);
 
-                if (prop == null || prop.objectReferenceValue == null)
+                if (prop == null || prop.objectReferenceInstanceIDValue == 0)
                 {
                     Records.Remove(r); continue;
                 }
-                if (!ExternalCatalog.RemoteAssets.TryGetValue(prop.objectReferenceValue, out List<CatalogEntry> entries))
+                if (!string.IsNullOrWhiteSpace(AssetDatabase.GetAssetPath(prop.objectReferenceValue)))
                 {
                     Records.Remove(r); continue;
                 }
