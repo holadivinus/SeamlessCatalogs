@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -58,6 +59,22 @@ namespace SeamlessCatalogs
             FileNameText.style.color = new Color(201f / 255f, 201f / 255f, 201f / 255f,1);
             FileNameText.style.overflow = Overflow.Hidden;
 
+            FakeSearchBar = new TextField ();
+            ProjectBrowser.rootVisualElement.Add(FakeSearchBar);
+            FakeSearchBar.style.position = Position.Absolute;
+            FakeSearchBar.style.flexDirection = FlexDirection.Row;
+            FakeSearchBar.RegisterValueChangedCallback(v =>
+            {
+                RepaintFolders();
+            });
+            FakeSearchBar.Q(className: TextField.inputUssClassName).style.paddingLeft = 13;
+
+            FakeSearchBarIcon = new Image();
+            ProjectBrowser.rootVisualElement.Add(FakeSearchBarIcon);
+            FakeSearchBarIcon.style.position = Position.Absolute;
+            FakeSearchBarIcon.scaleMode = ScaleMode.ScaleToFit;
+            FakeSearchBarIcon.image = EditorGUIUtility.IconContent("search_icon").image as Texture2D;
+
             var config = ScriptableObject.CreateInstance<SeamlessCatalogsConfig>();
             CatalogTree.id = RootFolderID;
         }
@@ -70,6 +87,8 @@ namespace SeamlessCatalogs
         public object ListArea;
         public VisualElement FakeBreadCrumbBar;
         public VisualElement FakeFileNameBar;
+        public TextField FakeSearchBar;
+        public Image FakeSearchBarIcon;
         public Image FakeFileNameBarIcon;
         public Label FileNameText;
         public static CatalogEntry LatestSel;
@@ -94,9 +113,17 @@ namespace SeamlessCatalogs
             FakeBreadCrumbBar.style.width = r.width-1;
             FakeBreadCrumbBar.style.height = r.height;
 
-
+            FakeSearchBar.style.left = (r.x + r.width) - 435;
+            FakeSearchBar.style.top = r.y-20;
+            FakeSearchBar.style.width = 319;
+            FakeSearchBar.style.height = 16;
 
             
+            FakeSearchBarIcon.style.left = ((r.x + r.width) - 435) + 6;
+            FakeSearchBarIcon.style.top = (r.y - 20)+5f;
+            FakeSearchBarIcon.style.width = 8;
+            FakeSearchBarIcon.style.height = 8;
+
             Rect r2 = (Rect)ProjectBrowser.RGF("m_BottomBarRect");
             FakeFileNameBar.style.left = r2.x + 1;
             FakeFileNameBar.style.top = r2.y;
@@ -113,18 +140,28 @@ namespace SeamlessCatalogs
             FileNameText.style.width = (r2.width - 100) - r2.height;
             FileNameText.style.height = r2.height;
 
+            void SetShow(VisualElement v, bool show)
+            {
+                v.style.visibility = show ? Visibility.Visible : Visibility.Hidden;
+                v.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+
+            }
             if (ViewingFolders != null && ViewingFolders.Length > 0 && FakeTreeViews.Contains(ViewingFolders[0]))
             {
+                SetShow(FakeSearchBar, true);
+                SetShow(FakeSearchBarIcon, true);
+                
                 FakeBreadCrumbBar.style.visibility = Visibility.Visible;
                 FakeFileNameBar.style.visibility = Visibility.Visible;
 
                 FakeFileNameBar.style.display = DisplayStyle.Flex;
                 FakeBreadCrumbBar.style.display = DisplayStyle.Flex;
 
-                if (Selection.activeObject != null && AvailableSels.TryGetValue(Selection.activeObject, out CatalogEntry c))
-                    LatestSel = c;
+                if (Selection.activeObject != null && ExternalCatalog.RemoteAssets.TryGetValue(Selection.activeObject, out List<CatalogEntry> cs))
+                    LatestSel = cs.First();
+                else LatestSel = null;
                 
-                if (false)//LatestSel != null && (Selection.activeObject == LatestSel || Selection.activeObject == LatestSel.LoadedAsset) && LatestSel.AssetType != null)
+                if (LatestSel != null)
                 {
                     FileNameText.style.visibility = Visibility.Visible;
                     FakeFileNameBarIcon.style.visibility = Visibility.Visible;
@@ -154,6 +191,9 @@ namespace SeamlessCatalogs
                 FakeFileNameBar.style.display = DisplayStyle.None;
                 FileNameText.style.display = DisplayStyle.None;
                 FakeFileNameBarIcon.style.display = DisplayStyle.None;
+
+                SetShow(FakeSearchBarIcon, false);
+                SetShow(FakeSearchBar, false);
             }
         }
 
@@ -233,6 +273,12 @@ namespace SeamlessCatalogs
 
             void ShowObject(string name, CatalogEntry entry)
             {
+                if (!string.IsNullOrWhiteSpace(FakeSearchBar.value))
+                {
+                    if (!name.ToLower().Contains(FakeSearchBar.value.ToLower()))
+                        return;
+                }
+
                 Texture2D icon = entry.UI.icon;
 
                 object newObj = Activator.CreateInstance(frT);
