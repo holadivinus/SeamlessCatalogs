@@ -412,7 +412,6 @@ public static class PostBuildProcessing
         public BundleItem ToProp(string propStr, bool containsArrays = false)
         {
             if (!containsArrays) return new BundleItem(Bundle, Object, Prop[propStr]);
-            Debug.Log(propStr);
 
             AssetTypeValueField curP = Prop;
             string[] propOps = propStr.Split('.', StringSplitOptions.RemoveEmptyEntries);
