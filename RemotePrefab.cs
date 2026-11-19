@@ -17,6 +17,7 @@ namespace SeamlessCatalogs
         public string CatalogName;
         public List<string> Dependancies;
         public List<Object> UsedClasses = new();
+
 #if UNITY_EDITOR
         private void Awake()
         {
@@ -68,14 +69,14 @@ namespace SeamlessCatalogs
             if (this == null) return;
             foreach (var baseRef in BaseRefs)
             {
-                Component localComp = GetTargComp(gameObject, baseRef);
+                if (baseRef.SceneObj == null) continue;
+
                 Component remoteComp = GetTargComp(remoteGobj, baseRef);
 
-                using var localSO = new SerializedObject(localComp);
+                using var localSO = new SerializedObject(baseRef.SceneObj);
                 var localProp = localSO.FindProperty(baseRef.propPath);
-                using var remoteSO = new SerializedObject(remoteComp);
+                using var remoteSO = new SerializedObject(baseRef.GetFinalObject(remoteComp));
                 var remoteProp = remoteSO.FindProperty(baseRef.propPath);
-
 
                 localSO.Update();
                 if (localProp.objectReferenceValue == null)
@@ -99,13 +100,13 @@ namespace SeamlessCatalogs
             isLoaded = false; midLoad = false;
             foreach (var br in BaseRefs)
             {
-                Component c = GetTargComp(gameObject, br);
-                using var so = new SerializedObject(c);
+                using var so = new SerializedObject(br.SceneObj);
                 var prop = so.FindProperty(br.propPath);
-                if (prop.objectReferenceValue != null && !string.IsNullOrWhiteSpace(AssetDatabase.GetAssetPath(prop.objectReferenceValue)))
-                    continue;
-                prop.objectReferenceValue = null;
-                so.ApplyModifiedPropertiesWithoutUndo();
+                if (prop.objectReferenceValue != null && string.IsNullOrWhiteSpace(AssetDatabase.GetAssetPath(prop.objectReferenceValue)))
+                {
+                    prop.objectReferenceValue = null;
+                    so.ApplyModifiedPropertiesWithoutUndo();
+                }
             }
         }
 #endif
@@ -119,6 +120,25 @@ namespace SeamlessCatalogs
         public string AssetType;
         public int[] gobjPath;
         public int compIdx;
-        public string propPath;
+        public string propPath; // path from SceneObj -> ref
+        public string[] fullPropPath; // path from component -> SceneObj -> ref
+
+#if UNITY_EDITOR
+        public UnityEngine.Object GetFinalObject(Component c)
+        {
+            if (fullPropPath == null) return c;
+
+            UnityEngine.Object o = c;
+            for (int i = 0; i < fullPropPath.Length-1; i++)
+            {
+                string path = fullPropPath[i];
+
+                using var so = new SerializedObject(o);
+                var prop = so.FindProperty(path);
+                o = prop.objectReferenceValue;
+            }
+            return o;
+        }
+#endif 
     }
 }

@@ -1,24 +1,19 @@
 #if UNITY_EDITOR
 using HarmonyLib;
 using System;
-using System.CodeDom;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Build.Pipeline;
 using UnityEditor.Compilation;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.AddressableAssets.ResourceLocators;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceLocations;
-using UnityEngine.ResourceManagement.ResourceProviders;
-using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
 namespace SeamlessCatalogs
@@ -155,14 +150,15 @@ namespace SeamlessCatalogs
                     GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);
 
 
-                // Record all Remote Assets this asset has (what can't be put in a .prefab
-                // also null them
-                RemotePrefab rp = gunkFab.AddComponent<RemotePrefab>();
-                rp.PrimaryKey = remoteDragEntry.Location.PrimaryKey;
-                rp.Dependancies = remoteDragEntry.Location.Dependencies.Select(d => d.InternalId).ToList();
-                rp.CatalogName = remoteDragEntry.Catalog.Name;
+                // Setup the prefab's remote knowledge
+                RemotePrefab root = gunkFab.AddComponent<RemotePrefab>();
+                root.PrimaryKey = remoteDragEntry.Location.PrimaryKey;
+                root.Dependancies = remoteDragEntry.Location.Dependencies.Select(d => d.InternalId).ToList();
+                root.CatalogName = remoteDragEntry.Catalog.Name;
+
+                // fixup scripts
                 MonoScript[] allMonoScripts = Resources.FindObjectsOfTypeAll<MonoScript>();
-                foreach (var c in gunkFab.GetComponentsInChildren<Component>(true))
+                foreach (var c in gunkFab.GetComponentsInChildren<MonoBehaviour>(true))
                 {
                     if (c == null) continue;
                     GameObject g = c.gameObject;
@@ -187,62 +183,117 @@ namespace SeamlessCatalogs
                     }
                     GameObjectUtility.RemoveMonoBehavioursWithMissingScript(g);
                 }
-                foreach (var c in gunkFab.GetComponentsInChildren<Component>(true))
+
+                // scan & record remote assets!!
+                Dictionary<ScriptableObject, ScriptableObject> localizedAssets = new();
+                string soAssetHolderPath = gunkfabPath + ".asset";
+                UnityEngine.Object soAssetHolder = null;
+                HashSet<MonoScript> assetMonoScripts = AssetDatabase.FindAssets("t:MonoScript").Select(g => AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(g))).ToHashSet();
+                void ScanObject(UnityEngine.Object obj, string[] rootPropPath = null, List<int> gobjPath = null, int compIdx = -1)
                 {
-                    if (c == rp) continue;
-                    GameObject curG = c.gameObject;
-                    using var so = new SerializedObject(c);
+                    if (obj == null) return; // why does this happen??
+
+                    // setup for root obj
+                    rootPropPath ??= Array.Empty<string>();
+                    if (obj is Component comp)
+                    {
+                        gobjPath = new();
+                        Transform parent = comp.transform;
+                        while (parent != root.transform)
+                        {
+                            gobjPath.Insert(0, parent.GetSiblingIndex());
+                            parent = parent.parent;
+                        }
+                        compIdx = Array.IndexOf(comp.gameObject.GetComponents<Component>(), comp);
+                    }
+
+                    using var so = new SerializedObject(obj);
                     bool dirt = false;
                     var prop = so.GetIterator();
+
+
                     while (prop.NextVisible(true))
                     {
-                        if (c == null) break;
                         if (prop.propertyType != SerializedPropertyType.ObjectReference) continue;
-                        if (prop.propertyPath == "m_Script")
-                            continue;
+                        if (prop.propertyPath == "m_Script") continue;
                         if (prop.objectReferenceValue == null) continue;
-                        if (prop.objectReferenceValue is Component comp && comp.gameObject.scene.IsValid()) continue;
+                        if (prop.objectReferenceValue is Component c && c.gameObject.scene.IsValid()) continue;
                         if (prop.objectReferenceValue is GameObject g && g.scene.IsValid()) continue;
-
-                        // get path to gobj
-                        List<int> gPath = new();
-                        Transform gP = c.transform;
-                        while (gP != rp.transform)
+                        if (prop.objectReferenceValue is ScriptableObject scripObj)
                         {
-                            gPath.Insert(0, gP.GetSiblingIndex());
-                            gP = gP.parent;
+                            // okay, sub-asset stufz!!!
+                            ScriptableObject localizedAsset;
+
+                            localizedAssets ??= new();
+                            if (!localizedAssets.TryGetValue(scripObj, out localizedAsset))
+                            {
+                                // get monoscript
+                                Type classT = MonoScript.FromScriptableObject(scripObj)?.GetClass();
+                                MonoScript realMonoScript = classT != null ? assetMonoScripts.FirstOrDefault(m => m.GetClass() == classT) : null;
+                                if (ReferenceEquals(realMonoScript, null))
+                                {
+                                    localizedAssets[scripObj] = null;
+                                    continue;
+                                }
+                                root.UsedClasses.Add(realMonoScript);
+
+                                // make copy
+                                localizedAsset = UnityEngine.Object.Instantiate(scripObj);
+                                localizedAsset.name = localizedAsset.name.Substring(0, localizedAsset.name.Length - 7);
+                                using var so2 = new SerializedObject(localizedAsset);
+                                var prop2 = so2.FindProperty("m_Script");
+                                int localID = localizedAsset.GetInstanceID();
+                                prop2.objectReferenceValue = realMonoScript;
+                                so2.ApplyModifiedPropertiesWithoutUndo();
+                                localizedAssets[scripObj] = localizedAsset = (ScriptableObject)EditorUtility.InstanceIDToObject(localID);
+
+                                // add to AssetDatabase
+                                if (soAssetHolder == null)
+                                {
+                                    AssetDatabase.CreateAsset(localizedAsset, soAssetHolderPath);
+                                    soAssetHolder = localizedAsset;
+                                } else AssetDatabase.AddObjectToAsset(localizedAsset, soAssetHolderPath);
+                                
+                                // also get sub-objects in this copy
+                                ScanObject(localizedAsset, rootPropPath.Append(prop.propertyPath).ToArray(), gobjPath, compIdx);
+                            }
+
+                            so.Update();
+                            prop.objectReferenceValue = localizedAsset;
+                            so.ApplyModifiedPropertiesWithoutUndo();
+                            dirt = true;
+                            continue;
+                            
                         }
 
 
-
-                        rp.BaseRefs.Add(new()
+                        // prop.objectReferenceValue is some sort of remote asset!
+                        root.BaseRefs.Add(new()
                         {
-                            SceneObj = c,
+                            SceneObj = obj,
                             AssetName = prop.objectReferenceValue.name,
                             AssetType = RemoteAssetTracker.GetSimpleType(prop.objectReferenceValue),
-                            gobjPath = gPath.ToArray(),
-                            compIdx = Array.IndexOf(c.gameObject.GetComponents<Component>(), c),
-                            propPath = prop.propertyPath
+                            gobjPath = gobjPath.ToArray(),
+                            compIdx = compIdx,
+                            propPath = prop.propertyPath,
+                            fullPropPath = rootPropPath.Append(prop.propertyPath).ToArray()
                         });
-                        if (prop.objectReferenceValue is ScriptableObject asSO)
-                        {
-                            MonoScript realVersion = allMonoScripts.FirstOrDefault(ms => !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(ms)) && ms.name == MonoScript.FromScriptableObject(asSO).name);
-                            rp.UsedClasses.Add(realVersion);
-                        }
 
                         so.Update();
                         prop.objectReferenceValue = null;
                         so.ApplyModifiedPropertiesWithoutUndo();
                         dirt = true;
-
-                        o += $"{c.gameObject.name}.{c.GetType().Name} -> {prop.propertyPath}\n";
                     }
-                    if (c != null && dirt)
-                        EditorUtility.SetDirty(c);
-                    if (c == null)
-                        GameObjectUtility.RemoveMonoBehavioursWithMissingScript(curG);
+                    if (dirt)
+                        EditorUtility.SetDirty(obj);
                 }
-                rp.UsedClasses = rp.UsedClasses.Distinct().ToList();
+                foreach (var c in gunkFab.GetComponentsInChildren<Component>(true))
+                {
+                    if (c == root) continue; // skip self
+
+                    ScanObject(c);
+                }
+                root.UsedClasses = root.UsedClasses.Distinct().ToList();
 
 
                 PrefabUtility.SaveAsPrefabAsset(gunkFab, gunkfabPath);
