@@ -306,10 +306,6 @@ namespace SeamlessCatalogs
                 localDragPrefabInstance = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(gunkfabPath));
                 localDragPrefabInstance.name = remoteDragPrefab.name;
 
-                foreach (var t in localDragPrefabInstance.GetComponentsInChildren<Transform>(true))
-                    if (t.gameObject.GetComponent<RemoteGameObjectTag>() == null)
-                        t.gameObject.AddComponent<RemoteGameObjectTag>();
-
                 curDragCols = localDragPrefabInstance.GetComponentsInChildren<Collider>().Where(c => c.enabled).ToArray();
                 foreach (var c in curDragCols)
                     c.enabled = false;
