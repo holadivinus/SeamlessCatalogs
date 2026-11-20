@@ -2,6 +2,8 @@
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
+using System;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -16,7 +18,7 @@ namespace SeamlessCatalogs
         public string PrimaryKey;
         public string CatalogName;
         public List<string> Dependancies;
-        public List<Object> UsedClasses = new();
+        public List<UnityEngine.Object> UsedClasses = new();
 
 #if UNITY_EDITOR
         private void Awake()
@@ -70,19 +72,27 @@ namespace SeamlessCatalogs
             foreach (var baseRef in BaseRefs)
             {
                 if (baseRef.SceneObj == null) continue;
-
-                Component remoteComp = GetTargComp(remoteGobj, baseRef);
-
-                using var localSO = new SerializedObject(baseRef.SceneObj);
-                var localProp = localSO.FindProperty(baseRef.propPath);
-                using var remoteSO = new SerializedObject(baseRef.GetFinalObject(remoteComp));
-                var remoteProp = remoteSO.FindProperty(baseRef.propPath);
-
-                localSO.Update();
-                if (localProp.objectReferenceValue == null)
+                try
                 {
-                    localProp.objectReferenceValue = remoteProp.objectReferenceValue;
-                    localSO.ApplyModifiedPropertiesWithoutUndo();
+                    Component remoteComp = GetTargComp(remoteGobj, baseRef);
+
+                    using var localSO = new SerializedObject(baseRef.SceneObj);
+                    var localProp = localSO.FindProperty(baseRef.propPath);
+                    using var remoteSO = new SerializedObject(baseRef.GetFinalObject(remoteComp));
+                    var remoteProp = remoteSO.FindProperty(baseRef.propPath);
+
+                    localSO.Update();
+                    if (localProp.objectReferenceValue == null)
+                    {
+                        localProp.objectReferenceValue = remoteProp.objectReferenceValue;
+                        localSO.ApplyModifiedPropertiesWithoutUndo();
+                    }
+                } catch (Exception ex)
+                {
+                    Debug.Log("Failed to grab prefab data!");
+                    Debug.Log(baseRef.SceneObj);
+                    Debug.Log(JsonUtility.ToJson(baseRef.fullPropPath));
+                    Debug.LogException(ex);
                 }
             }
             midLoad = false;
