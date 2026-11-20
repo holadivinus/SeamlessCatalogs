@@ -462,8 +462,8 @@ namespace SeamlessCatalogs
 
             public static bool Prefix(object __instance)
             {
-                var man = __instance.ToManager();
-                if (man.ListArea == null) return true;
+                var man = __instance.ToManagerOrNull();
+                if (man?.ListArea == null) return true;
                 int[] selecteds = (int[])man.ListArea.RRM("GetSelection");
                 if (selecteds == null || selecteds.Length == 0) return true;
 

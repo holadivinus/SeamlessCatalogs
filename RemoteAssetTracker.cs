@@ -343,6 +343,24 @@ namespace SeamlessCatalogs
                 so.ApplyModifiedPropertiesWithoutUndo();
             }
             loading = false;
+
+#if SOLID_STRUCTURING
+            var qfs2 = gameObject.scene.GetRootGameObjects().SelectMany(go => go.GetComponentsInChildren<QuadBlock>());
+            foreach (var qb in qfs2)
+            {
+                if (qb.QuadBlockType == QuadBlockType.StructureZone)
+                    qb.UpdateMesh();
+                else 
+                {
+                    // Hacky
+                    foreach (var qf in qb.QuadFaces)
+                    {
+                        qb.ActiveQuad = qf.MeshRenderer;
+                    } 
+                    qb.ActiveQuad = null;
+                }
+            }
+#endif
         }
         private void RecordRemotePrefabModifications(IEnumerable<GameObject> gobjs)
         {
