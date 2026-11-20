@@ -285,6 +285,7 @@ public static class PostBuildProcessing
                     for (int i = 0; i < trackComp.Prop[which+".Array"].AsArray.size; i++)
                     {
                         AssetTypeValueField curRec = trackComp.Prop[which+".Array"][i];
+                        if (curRec["Comp.m_PathID"].AsLong == 0) continue;
 
                         string remoteCatPath = CatName2Path(curRec["CatalogName"].AsString);
                         string remoteBundlePath = Path.Combine(Directory.GetParent(remoteCatPath).FullName, curRec["PrimaryBundle"].AsString);
