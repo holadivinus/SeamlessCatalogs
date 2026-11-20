@@ -42,6 +42,8 @@ class AssetRAT : ScriptableObject
         var newRat = CreateInstance<AssetRAT>();
         AssetDatabase.AddObjectToAsset(newRat, assetPath);
         newRat.InitialSetup(command.context);
+
+        AssetDatabase.SaveAssets();
     }
 
     // Custom Verifier
@@ -71,36 +73,6 @@ class AssetRAT : ScriptableObject
     public void OnAfterDeserialize()
     {
         LoadAssets();
-    }
-
-    public void AddDep(IBuildParameters buildParams, IDependencyData dependancyDatas)
-    {
-        if (!ObjectIdentifier.TryGetObjectIdentifier(this, out ObjectIdentifier id))
-        {
-            Debug.LogError("Couldn't get my own id?");
-            return;
-        }
-
-        for (int i = 0; i < dependancyDatas.SceneInfo.Values.Count; i++)
-        {
-            SceneDependencyInfo si = dependancyDatas.SceneInfo.Values.ElementAt(i);
-            bool dirt = false;
-            foreach (var item in si.referencedObjects)
-            {
-                if (string.Compare(AssetDatabase.GUIDToAssetPath(item.guid), AssetPath) == 0)
-                {
-                    si.RSF("m_ReferencedObjects", si.referencedObjects.Append(id).ToArray());
-                    dirt = true;
-                }
-            }
-            if (dirt)
-            {
-                dependancyDatas.SceneInfo[dependancyDatas.SceneInfo.Keys.ElementAt(i)] = si;
-                Debug.Log("injected dep!");
-            }
-        }
-        
-        return ;
     }
 
     bool loading = false;
