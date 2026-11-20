@@ -34,17 +34,17 @@ public static class PostBuildProcessing
             {
                 ProcessCat(palletCat);
             }
-            catch (Exception e) 
+            catch (Exception e)
             {
                 UnityEngine.Debug.LogException(e);
             }
         }
-           
+
         EditorApplication.delayCall += () => EditorUtility.RequestScriptReload();
     }
 
     private static AssetsManager CurManager;
-    static void ProcessCat(string catPath) 
+    static void ProcessCat(string catPath)
     {
         var localBundles = SearchForFiles(new FileInfo(catPath).Directory.FullName, ".bundle");
 
@@ -58,7 +58,7 @@ public static class PostBuildProcessing
         foreach (var localBundle in localBundles)
         {
             BundleItem.ResetCache();
-            
+
             // load local bundle into ram
             var ms = new MemoryStream();
             using (var fileStream = new FileStream(localBundle, FileMode.Open))
@@ -67,7 +67,7 @@ public static class PostBuildProcessing
             }
             ms.Position = 0;
             BundleFileInstance loadedLocalBundle = CurManager.LoadBundleFile(ms, localBundle, true);
-            
+
             // Load each sub-bundle
             List<AssetsFileInstance> subBundles = new();
             for (int i = 0; i < loadedLocalBundle.file.BlockAndDirInfo.DirectoryInfos.Count; i++)
@@ -81,7 +81,7 @@ public static class PostBuildProcessing
             bool isScriptsBundle = localBundle.EndsWith("monoscripts.bundle");
             if (isScriptsBundle)
                 scriptsBundle = subBundles[0];
-            
+
             // find first preloadTable
             BundleItem preloadTable = null;
             foreach (var ba in subBundles)
@@ -106,13 +106,13 @@ public static class PostBuildProcessing
                                                                        .Where(go => CurManager.GetBaseField(ba, go)["m_Name"].AsString == RemoteAssetTracker.REMOTE_STR)
                                                                        .Select(go => new BundleItem(ba, go, CurManager.GetExtAsset(ba, CurManager.GetBaseField(ba, go)["m_Component"]["Array"][1]["component"]).baseField))
                                                          ).ToArray();
-            
+
             // also get the asset variants of these
             var soTrackers = subBundles.SelectMany(ba => ba.file.GetAssetsOfType(AssetClassID.MonoBehaviour)
                                        .Where(mb => CurManager.GetBaseField(ba, mb)["m_Name"].AsString == RemoteAssetTracker.REMOTE_STR)
                                        .Select(mb => new BundleItem(ba, mb, CurManager.GetBaseField(ba, mb))));
             trackers = trackers.Concat(soTrackers).ToArray();
-            
+
 
             string CatName2Path(string name) => ExternalCatalog.EveryCatalogPathEver.FirstOrDefault(cat => cat.EndsWith($"catalog_{name}.json"));
 
@@ -210,6 +210,7 @@ public static class PostBuildProcessing
                     {
                         string assetName = curPrefab.Prop["BaseRefs.Array"][j]["AssetName"].AsString;
                         string assetType = curPrefab.Prop["BaseRefs.Array"][j]["AssetType"].AsString;
+                        if (curPrefab.Prop["BaseRefs.Array"][j]["SceneObj.m_PathID"].AsLong == 0) continue;
                         var targAsset = BundleItem.GetItem(CurManager.GetExtAsset(curPrefab.Bundle, curPrefab.Prop["BaseRefs.Array"][j]["SceneObj"]));
 
                         RemoteAsset existingRemote = neededAssets.FirstOrDefault(r => dependancyPaths.Contains(r.BundlePath) && r.assetName == assetName && r.assetType == assetType);
@@ -225,7 +226,7 @@ public static class PostBuildProcessing
                         {
                             shouldSet = targAsset.ToProp(propPath, true).Prop["m_PathID"].AsLong == 0;
                         }
-                        catch (Exception ex) 
+                        catch (Exception ex)
                         {
                             Debug.LogError($"Couldn't find prop on {(AssetClassID)targAsset.Object.TypeId}, likely null: " + assetType + " " + assetName + "." + propPath);
                             if ((AssetClassID)targAsset.Object.TypeId == AssetClassID.MonoBehaviour)
@@ -264,7 +265,7 @@ public static class PostBuildProcessing
                     BundleItem curPrefab = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, trackComp.Prop["Prefabs.Array"][i]));
                     handlePrefab(curPrefab);
                 }
-                if (trackComp.Prop.Children.First(c => string.Compare(c.FieldName, "IsPrefabsTracker") == 0).AsBool) 
+                if (trackComp.Prop.Children.First(c => string.Compare(c.FieldName, "IsPrefabsTracker") == 0).AsBool)
                 {
                     var ratGobj = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, trackComp.Prop["m_GameObject"]));
                     var transf = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, ratGobj.Prop["m_Component.Array"][0]["component"]));
@@ -282,9 +283,9 @@ public static class PostBuildProcessing
                 for (int m = 0; m < 2; m++)
                 {
                     string which = m == 0 ? "Records" : "PrefabModRecords";
-                    for (int i = 0; i < trackComp.Prop[which+".Array"].AsArray.size; i++)
+                    for (int i = 0; i < trackComp.Prop[which + ".Array"].AsArray.size; i++)
                     {
-                        AssetTypeValueField curRec = trackComp.Prop[which+".Array"][i];
+                        AssetTypeValueField curRec = trackComp.Prop[which + ".Array"][i];
                         if (curRec["Comp.m_PathID"].AsLong == 0) continue;
 
                         string remoteCatPath = CatName2Path(curRec["CatalogName"].AsString);
@@ -305,7 +306,7 @@ public static class PostBuildProcessing
                             neededAssets.Add(remoteAsset = new(remoteBundlePath, assetName, assetType, dependancies));
                         }
 
-                        pendingChanges2.Add(new() 
+                        pendingChanges2.Add(new()
                         {
                             Targ = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, curRec["Comp"])),
                             Asset = remoteAsset,
@@ -367,9 +368,9 @@ public static class PostBuildProcessing
 
             // all sub-bundles ref assets & the preload table is full!
             // now we just gotta enforce the records
-            foreach (var pendingChanges in new[] { pendingChanges1, pendingChanges2 }) 
+            foreach (var pendingChanges in new[] { pendingChanges1, pendingChanges2 })
                 foreach (var change in pendingChanges)
-                { 
+                {
                     if (change.Asset.Failure || change.DontChange) continue;
 
                     change.Asset.RegisterAsDependancy(change.Targ.Bundle);
@@ -378,7 +379,8 @@ public static class PostBuildProcessing
                     try
                     {
                         targProp = change.Targ.ToProp(change.PropPath, true);
-                    }catch (Exception ex)
+                    }
+                    catch (Exception ex)
                     {
                         Debug.LogError($"Couldn't find prop on {(AssetClassID)change.Targ.Object.TypeId}, likely null: " + change.Asset.assetType + " " + change.Asset.assetName + "." + change.PropPath);
                         if ((AssetClassID)change.Targ.Object.TypeId == AssetClassID.MonoBehaviour)
@@ -389,7 +391,7 @@ public static class PostBuildProcessing
                                 AssetFileInfo monoScrip = scriptsBundle.file.GetAssetsOfType(AssetClassID.MonoScript).FirstOrDefault(a => a.PathId == missing);
                                 Debug.Log("whats got missing: " + monoScrip == null ? missing : CurManager.GetBaseField(scriptsBundle, monoScrip)["m_Name"].AsString);
                             }
-                            catch(Exception e)
+                            catch (Exception e)
                             {
                                 Debug.LogError("couldn't get the monobehaviours name :/");
                                 Debug.LogException(e);
@@ -402,7 +404,7 @@ public static class PostBuildProcessing
                     targProp.Prop["m_PathID"].AsLong = change.Asset.PathID;
                     change.Targ.Save();
                 }
-            
+
 
             foreach (var ba in subBundles)
                 loadedLocalBundle.file.BlockAndDirInfo.DirectoryInfos[subBundleIdxs[ba]].SetNewData(ba.file);
@@ -444,15 +446,15 @@ public static class PostBuildProcessing
             FileName = Path.GetFullPath(@"Packages/com.holadivinus.seamlesscatalogs/CRCPatcher~/Example.exe"),
             Arguments = $" patchcrc \"{Path.GetFullPath(catPath)}\"",
             UseShellExecute = false,
-            RedirectStandardOutput = true, 
-            RedirectStandardError = true, 
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
             CreateNoWindow = true
         };
 
         using var process = System.Diagnostics.Process.Start(startInfo);
         string output = process.StandardOutput.ReadToEnd();
         string error = process.StandardError.ReadToEnd();
-        process.WaitForExit(); 
+        process.WaitForExit();
     }
     private class BundleItem
     {
@@ -497,7 +499,7 @@ public static class PostBuildProcessing
             return new BundleItem(Bundle, Object, curP);
         }
     }
-    private class RemoteAsset 
+    private class RemoteAsset
     {
         public RemoteAsset(string bunPath, string assetName, string assetType, List<string> depBuns) : this(new List<string>() { bunPath }, assetName, assetType, depBuns) { }
         public RemoteAsset(List<string> bunPathz, string assetName, string assetType, List<string> depBuns)
@@ -543,7 +545,7 @@ public static class PostBuildProcessing
 
             if (Failure) UnityEngine.Debug.LogException(new Exception("Failed to find cab for " + assetName + " in " + JsonConvert.SerializeObject(bunPathz.ToArray())));
         }
-        
+
 
         public string assetName;
         public string assetType;
@@ -564,12 +566,12 @@ public static class PostBuildProcessing
                 AssetsFileExternal cur = fi.file.Metadata.Externals[i];
                 if (cur.PathName == CABasRef)
                 {
-                    FileIDs[fi] = i+1;
+                    FileIDs[fi] = i + 1;
                     return;
                 }
             }
-             
-            
+
+
             fi.file.Metadata.Externals.Add(new()
             {
                 VirtualAssetPathName = string.Empty,

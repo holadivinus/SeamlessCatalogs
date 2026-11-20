@@ -114,6 +114,7 @@ namespace SeamlessCatalogs
             isLoaded = false; midLoad = false;
             foreach (var br in BaseRefs)
             {
+                if (br.SceneObj == null) continue;
                 using var so = new SerializedObject(br.SceneObj);
                 var prop = so.FindProperty(br.propPath);
                 if (prop.objectReferenceValue != null && string.IsNullOrWhiteSpace(AssetDatabase.GetAssetPath(prop.objectReferenceValue)))
