@@ -129,7 +129,7 @@ public static class PostBuildProcessing
                 if (isMatProp != null && isMatProp.AsBool)
                 {
                     // gotta add refs to the mat
-                    BundleItem mat = new BundleItem(CurManager.GetExtAsset(trackComp.Bundle, trackComp.Prop["MyAsset"]));
+                    BundleItem mat = BundleItem.GetItem(CurManager.GetExtAsset(trackComp.Bundle, trackComp.Prop["MyAsset"]));
                     //mat.Prop["m_Shader.m_FileID"].AsInt = 0;
                     //mat.Prop["m_Shader.m_PathID"].AsLong = 0;
                     // Textures!!!!!
@@ -459,7 +459,7 @@ public static class PostBuildProcessing
         {
             Bundle = b; Prop = i; Object = o;
         }
-        public BundleItem(AssetExternal ext)
+        private BundleItem(AssetExternal ext)
         {
             Bundle = ext.file; Prop = ext.baseField; Object = ext.info;
         }
