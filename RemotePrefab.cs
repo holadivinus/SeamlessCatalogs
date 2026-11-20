@@ -23,6 +23,7 @@ namespace SeamlessCatalogs
 #if UNITY_EDITOR
         private void Awake()
         {
+            this.hideFlags |= HideFlags.HideInInspector;
         }
 
         private void OnEnable()
@@ -91,7 +92,7 @@ namespace SeamlessCatalogs
                 {
                     Debug.Log("Failed to grab prefab data!");
                     Debug.Log(baseRef.SceneObj);
-                    Debug.Log(JsonUtility.ToJson(baseRef.fullPropPath));
+                    Debug.Log(string.Join('.', baseRef.fullPropPath));
                     Debug.LogException(ex);
                 }
             }
@@ -102,7 +103,10 @@ namespace SeamlessCatalogs
         {
             foreach (var chilIdx in baseRef.gobjPath)
                 root = root.transform.GetChild(chilIdx).gameObject;
-            return root.GetComponents<Component>()[baseRef.compIdx];
+
+            // Strange that this happens.
+            var compz = root.GetComponents<Component>().Where(c => c != null).ToArray();
+            return compz[baseRef.compIdx];
         }
 
         public void NullRefs()
