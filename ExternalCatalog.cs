@@ -62,7 +62,7 @@ namespace SeamlessCatalogs
             void FillFilter(CatalogEntry filtRoot, Type filtTo, IResourceLocation[] assets)
             {
                 foreach (var item in assets)
-                    FindOrCreateChild(filtRoot, Path.GetFileName(item.InternalId), filtTo).Location = item;
+                    FindOrCreateChild(filtRoot, Path.GetFileName(item.InternalId), item.ResourceType ?? filtTo).Location = item;
             }
              
             // filtered stuff
@@ -86,6 +86,7 @@ namespace SeamlessCatalogs
                 AddFilt<Texture>();
                 AddFilt<Shader>();
                 AddFilt<GameObject>();
+                AddFilt<AudioClip>();
                 AddFilt<TMP_FontAsset>();
 
                 if (filtRoot.Children.Count == 0)
