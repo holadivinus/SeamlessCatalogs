@@ -106,6 +106,13 @@ public static class PostBuildProcessing
                                                                        .Where(go => CurManager.GetBaseField(ba, go)["m_Name"].AsString == RemoteAssetTracker.REMOTE_STR)
                                                                        .Select(go => new BundleItem(ba, go, CurManager.GetExtAsset(ba, CurManager.GetBaseField(ba, go)["m_Component"]["Array"][1]["component"]).baseField))
                                                          ).ToArray();
+            
+            // also get the asset variants of these
+            var soTrackers = subBundles.SelectMany(ba => ba.file.GetAssetsOfType(AssetClassID.MonoBehaviour)
+                                       .Where(mb => CurManager.GetBaseField(ba, mb)["m_Name"].AsString == RemoteAssetTracker.REMOTE_STR)
+                                       .Select(mb => new BundleItem(ba, mb, CurManager.GetBaseField(ba, mb))));
+            trackers = trackers.Concat(soTrackers).ToArray();
+            
 
             string CatName2Path(string name) => ExternalCatalog.EveryCatalogPathEver.FirstOrDefault(cat => cat.EndsWith($"catalog_{name}.json"));
 
@@ -116,8 +123,69 @@ public static class PostBuildProcessing
             HashSet<string> localAssetPaths = new(); // asset paths noted in this subbundle by RemoteAssetTrackers
             foreach (var trackComp in trackers)
             {
-
                 localAssetPaths.Add(trackComp.Prop["AssetPath"].AsString);
+
+                var isMatProp = trackComp.Prop.Children.FirstOrDefault(c => string.Compare(c.FieldName, "IsMaterial") == 0);
+                if (isMatProp != null && isMatProp.AsBool)
+                {
+                    // gotta add refs to the mat
+                    BundleItem mat = new BundleItem(CurManager.GetExtAsset(trackComp.Bundle, trackComp.Prop["MyAsset"]));
+                    //mat.Prop["m_Shader.m_FileID"].AsInt = 0;
+                    //mat.Prop["m_Shader.m_PathID"].AsLong = 0;
+                    // Textures!!!!!
+                    var matTexArr = mat.Prop["m_SavedProperties.m_TexEnvs.Array"];
+                    var neededTexArr = trackComp.Prop["MaterialTexPropList.Array"];
+                    for (int i = 0; i < neededTexArr.AsArray.size; i++)
+                    {
+                        var newItem = ValueBuilder.DefaultValueFieldFromArrayTemplate(matTexArr);
+                        newItem["first"].AsString = neededTexArr[i]["name"].AsString;
+                        newItem["second.m_Texture.m_FileID"].AsInt = neededTexArr[i]["value.m_FileID"].AsInt;
+                        newItem["second.m_Texture.m_PathID"].AsLong = neededTexArr[i]["value.m_PathID"].AsLong;
+                        newItem["second.m_Scale.x"].AsFloat = neededTexArr[i]["scale.x"].AsFloat;
+                        newItem["second.m_Scale.y"].AsFloat = neededTexArr[i]["scale.y"].AsFloat;
+                        newItem["second.m_Offset.x"].AsFloat = neededTexArr[i]["offset.x"].AsFloat;
+                        newItem["second.m_Offset.y"].AsFloat = neededTexArr[i]["offset.y"].AsFloat;
+                        matTexArr.Children.Add(newItem);
+                    }
+
+                    // Ints!!!!!
+                    var matIntArr = mat.Prop["m_SavedProperties.m_Ints.Array"];
+                    var neededIntArr = trackComp.Prop["MaterialIntPropList.Array"];
+                    for (int i = 0; i < neededIntArr.AsArray.size; i++)
+                    {
+                        var newItem = ValueBuilder.DefaultValueFieldFromArrayTemplate(matIntArr);
+                        newItem["first"].AsString = neededIntArr[i]["name"].AsString;
+                        newItem["second"].AsInt = neededIntArr[i]["value"].AsInt;
+                        matIntArr.Children.Add(newItem);
+                    }
+
+                    // Floats!!!!!
+                    var matFloatArr = mat.Prop["m_SavedProperties.m_Floats.Array"];
+                    var neededFloatArr = trackComp.Prop["MaterialFloatPropList.Array"];
+                    for (int i = 0; i < neededFloatArr.AsArray.size; i++)
+                    {
+                        var newItem = ValueBuilder.DefaultValueFieldFromArrayTemplate(matFloatArr);
+                        newItem["first"].AsString = neededFloatArr[i]["name"].AsString;
+                        newItem["second"].AsFloat = neededFloatArr[i]["value"].AsFloat;
+                        matFloatArr.Children.Add(newItem);
+                    }
+
+                    // Colors!!!!!
+                    var matColArr = mat.Prop["m_SavedProperties.m_Colors.Array"];
+                    var neededColArr = trackComp.Prop["MaterialColorPropList.Array"];
+                    for (int i = 0; i < neededColArr.AsArray.size; i++)
+                    {
+                        var newItem = ValueBuilder.DefaultValueFieldFromArrayTemplate(matColArr);
+                        newItem["first"].AsString = neededColArr[i]["name"].AsString;
+                        newItem["second.r"].AsFloat = neededColArr[i]["value.r"].AsFloat;
+                        newItem["second.g"].AsFloat = neededColArr[i]["value.g"].AsFloat;
+                        newItem["second.b"].AsFloat = neededColArr[i]["value.b"].AsFloat;
+                        newItem["second.a"].AsFloat = neededColArr[i]["value.a"].AsFloat;
+                        matColArr.Children.Add(newItem);
+                    }
+
+                    mat.Save();
+                }
 
                 void handlePrefab(BundleItem curPrefab)
                 {
@@ -157,7 +225,7 @@ public static class PostBuildProcessing
                         {
                             shouldSet = targAsset.ToProp(propPath, true).Prop["m_PathID"].AsLong == 0;
                         }
-                        catch (DummyFieldAccessException ex) 
+                        catch (Exception ex) 
                         {
                             Debug.LogError($"Couldn't find prop on {(AssetClassID)targAsset.Object.TypeId}, likely null: " + assetType + " " + assetName + "." + propPath);
                             if ((AssetClassID)targAsset.Object.TypeId == AssetClassID.MonoBehaviour)
@@ -309,7 +377,7 @@ public static class PostBuildProcessing
                     try
                     {
                         targProp = change.Targ.ToProp(change.PropPath, true);
-                    }catch (DummyFieldAccessException ex)
+                    }catch (Exception ex)
                     {
                         Debug.LogError($"Couldn't find prop on {(AssetClassID)change.Targ.Object.TypeId}, likely null: " + change.Asset.assetType + " " + change.Asset.assetName + "." + change.PropPath);
                         if ((AssetClassID)change.Targ.Object.TypeId == AssetClassID.MonoBehaviour)
@@ -391,7 +459,7 @@ public static class PostBuildProcessing
         {
             Bundle = b; Prop = i; Object = o;
         }
-        private BundleItem(AssetExternal ext)
+        public BundleItem(AssetExternal ext)
         {
             Bundle = ext.file; Prop = ext.baseField; Object = ext.info;
         }
@@ -456,6 +524,8 @@ public static class PostBuildProcessing
 
                         var @base = CurManager.GetBaseField(subBundle, subAsset);
                         var nameField = @base.Children.FirstOrDefault(c => c.FieldName == "m_Name");
+                        if (subAsset.TypeId == (int)AssetClassID.Shader)
+                            nameField = @base["m_ParsedForm"]["m_Name"];
                         if (nameField != null && nameField.AsString == assetName)
                         {
                             CAB = subBundle.name;

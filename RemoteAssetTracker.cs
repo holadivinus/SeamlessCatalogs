@@ -22,6 +22,7 @@ namespace SeamlessCatalogs
         [SerializeField] string AssetPath;
         [SerializeField] List<RemotePrefab> Prefabs = new();
         public bool IsPrefabsTracker;
+        [SerializeField] List<AssetRAT> AllRats = new();
 
 #if UNITY_EDITOR
         public const string REMOTE_STR = "REMOTE_ASSET_TRACKER[9739799856]";
@@ -149,6 +150,8 @@ namespace SeamlessCatalogs
         private void RecordRemoteAssets(IEnumerable<GameObject> gobjs)
         {
             if (BuildPipeline.isBuildingPlayer || EditorApplication.isCompiling || loading) return;
+
+            AllRats = AssetDatabase.FindAssets($"t:{nameof(AssetRAT)}").Select(g => AssetDatabase.GUIDToAssetPath(g)).Select(p => AssetDatabase.LoadAssetAtPath<AssetRAT>(p)).Where(ar => ar != null).ToList();
 
             List<UnityEngine.Object> dirtComps = new List<UnityEngine.Object>();
             foreach (GameObject rootGobj in gobjs)
@@ -415,7 +418,7 @@ namespace SeamlessCatalogs
 
 
         [Serializable]
-        class RemoteLoadRecord
+        public class RemoteLoadRecord
         {
             public RemoteLoadRecord(UnityEngine.Object c, string propPath)
             {

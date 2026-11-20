@@ -73,7 +73,7 @@ namespace SeamlessCatalogs
                 
                 void AddFilt<T>()
                 {
-                    IResourceLocation[] assets = goodAssets.Where(ga => ga.ResourceType == typeof(T)).ToArray();
+                    IResourceLocation[] assets = goodAssets.Where(ga => ga.ResourceType != null & typeof(T).IsAssignableFrom(ga.ResourceType)).ToArray();
                     if (assets.Length == 0) return;
                     if (typeof(T) == typeof(GameObject))
                         assets = assets.OrderBy(l => l.InternalId.EndsWith(".prefab") ? -1 : 1).ToArray();
