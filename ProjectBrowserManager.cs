@@ -437,7 +437,8 @@ namespace SeamlessCatalogs
 
             public static void Prefix(object __instance, bool doubleClicked)
             {
-                var man = __instance.ToManager();
+                var man = __instance.ToManagerOrNull();
+                if (man == null) return;
                 int[] selecteds = (int[])man.ListArea.RRM("GetSelection");
                 if (selecteds == null || selecteds.Length == 0) return;
 

@@ -174,11 +174,9 @@ namespace SeamlessCatalogs
                     c++;
                     if (c == 4) throw new Exception("Couldn't load remote asset: " + Location.InternalId);
                 }
-                
 
-                if (ExternalCatalog.RemoteAssets.TryGetValue(LoadedAsset, out List<CatalogEntry> assetEntries))
-                    assetEntries.Add(this);
-                else ExternalCatalog.RemoteAssets[LoadedAsset] = new() { this };
+                foreach (var item in Catalog.AllEntries.Where(e => e.Location != null && e.Location.PrimaryKey == Location.PrimaryKey))
+                    item.OnLoadedAsset(LoadedAsset);
 
                 var loadedLocs = Location.FindAllDependancies();
                 loadedLocs.Add(Location);
@@ -214,6 +212,15 @@ namespace SeamlessCatalogs
                 CurLoaders.Remove(this);
                 return LoadedAsset;
             }
+        }
+    
+    
+        private void OnLoadedAsset(UnityEngine.Object asset)
+        {
+            LoadedAsset = asset;
+            if (ExternalCatalog.RemoteAssets.TryGetValue(LoadedAsset, out List<CatalogEntry> assetEntries))
+                assetEntries.Add(this);
+            else ExternalCatalog.RemoteAssets[LoadedAsset] = new() { this };
         }
     }
 }
